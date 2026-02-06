@@ -1,7 +1,7 @@
 # Specification: DPD Updater Go Conversion
 
 ## Overview
-Convert the existing Python/Flet-based DPD Updater (`resources/dpd-updater`) into a high-performance, standalone Go application using the Fyne GUI framework. The new project will reside in `resources/dpd-updater-go` and will be structured as a self-contained repository that can be integrated as a submodule.
+Convert the existing Python/Flet-based DPD Updater (`resources/dpd-updater`) into a high-performance, standalone Go application using the Fyne GUI framework. The new project will reside in its own repository and will be structured as a self-contained repository that can be integrated as a submodule.
 
 ## Goals
 - Achieve 1:1 feature parity with the current Python implementation.
@@ -35,7 +35,7 @@ Convert the existing Python/Flet-based DPD Updater (`resources/dpd-updater`) int
 ## Technical Considerations
 - **Concurrency:** Use Go routines for background downloads and file operations to keep the GUI responsive.
 - **Error Handling:** Robust error reporting in the UI for network failures or permission issues.
-- **Submodule Management:** The project resides in `resources/dpd-updater-go` as a Git submodule.
+- **Submodule Management:** The project resides as a Git submodule.
 
 ## Non-Functional Requirements
 - **Standalone:** The `resources/dpd-updater2` directory must be a fully functional Git repository root.

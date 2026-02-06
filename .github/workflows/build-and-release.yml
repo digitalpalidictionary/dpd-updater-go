@@ -23,7 +23,7 @@ jobs:
       - name: Get Version Info
         id: version_info
         run: |
-          # Get latest tag or "none" if it doesn't exist
+          # Get latest tag or "v0.0.0" if it doesn't exist
           TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           echo "tag=$TAG" >> $GITHUB_OUTPUT
         shell: bash
@@ -80,11 +80,10 @@ jobs:
         with:
           go-version: '1.22'
           cache: true
-          cache-dependency-path: resources/dpd-updater-go/go.sum
+          cache-dependency-path: go.sum
 
       - name: Install dependencies
         run: |
-          cd resources/dpd-updater-go
           # Install Fyne dependencies (X11 for Linux)
           if [ "${{ matrix.platform }}" = "linux" ]; then
             sudo apt-get update
@@ -95,7 +94,6 @@ jobs:
 
       - name: Build Executable
         run: |
-          cd resources/dpd-updater-go
           VERSION="${{ needs.calculate-version.outputs.version }}"
           go build -ldflags="-s -w" -o "${{ matrix.binary_name }}" ./cmd/dpd-updater
         shell: bash
@@ -103,7 +101,6 @@ jobs:
       - name: Prepare Artifacts
         shell: bash
         run: |
-          cd resources/dpd-updater-go
           VERSION="${{ needs.calculate-version.outputs.version }}"
           mkdir -p dist
           
@@ -112,7 +109,6 @@ jobs:
           elif [[ "${{ matrix.platform }}" == "linux" ]]; then
             mv "${{ matrix.binary_name }}" "dist/dpd-updater-linux-$VERSION"
           elif [[ "${{ matrix.platform }}" == "macos" ]]; then
-            # For macOS, just the binary for now, can be improved to .app later
             mv "${{ matrix.binary_name }}" "dist/dpd-updater-macos-$VERSION"
           fi
 
@@ -120,7 +116,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: resources/dpd-updater-go/dist/*
+          path: dist/*
 
   release:
     name: Release

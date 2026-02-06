@@ -2,7 +2,7 @@
 
 ## Phase 1: Environment & Scaffolding
 - [x] Task: Initialize standalone project structure
-    - [x] Initialize `git` and `go mod` in `resources/dpd-updater-go`
+    - [x] Initialize `git` and `go mod` in the project root
     - [x] Create directory structure: `cmd/`, `internal/config`, `internal/github`, `internal/installer`, `internal/system`, `internal/ui`
 - [x] Task: Setup Fyne and cross-platform build tooling
     - [x] Install Fyne dependencies
