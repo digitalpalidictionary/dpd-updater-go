@@ -1,0 +1,161 @@
+name: Build & Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  calculate-version:
+    name: Calculate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next_version.outputs.version }}
+      tag: ${{ steps.next_version.outputs.tag }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Version Info
+        id: version_info
+        run: |
+          # Get latest tag or "none" if it doesn't exist
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Determine Next Version
+        id: next_version
+        run: |
+          TAG="${{ steps.version_info.outputs.tag }}"
+          
+          # Strip 'v' prefix
+          TAG_V=${TAG#v}
+          
+          # Extract major.minor.patch
+          MAJOR=$(echo $TAG_V | cut -d. -f1)
+          MINOR=$(echo $TAG_V | cut -d. -f2)
+          PATCH=$(echo $TAG_V | cut -d. -f3)
+          
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v${NEW_VERSION}" >> $GITHUB_OUTPUT
+        shell: bash
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: calculate-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+            artifact_name: dpd-updater-windows
+            binary_name: dpd-updater.exe
+          - platform: macos
+            os: macos-latest
+            artifact_name: dpd-updater-mac
+            binary_name: dpd-updater
+          - platform: linux
+            os: ubuntu-latest
+            artifact_name: dpd-updater-linux
+            binary_name: dpd-updater
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+          cache-dependency-path: resources/dpd-updater-go/go.sum
+
+      - name: Install dependencies
+        run: |
+          cd resources/dpd-updater-go
+          # Install Fyne dependencies (X11 for Linux)
+          if [ "${{ matrix.platform }}" = "linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y libgl1-mesa-dev xorg-dev
+          fi
+          go mod download
+        shell: bash
+
+      - name: Build Executable
+        run: |
+          cd resources/dpd-updater-go
+          VERSION="${{ needs.calculate-version.outputs.version }}"
+          go build -ldflags="-s -w" -o "${{ matrix.binary_name }}" ./cmd/dpd-updater
+        shell: bash
+
+      - name: Prepare Artifacts
+        shell: bash
+        run: |
+          cd resources/dpd-updater-go
+          VERSION="${{ needs.calculate-version.outputs.version }}"
+          mkdir -p dist
+          
+          if [[ "${{ matrix.platform }}" == "windows" ]]; then
+            mv "${{ matrix.binary_name }}" "dist/dpd-updater-windows-$VERSION.exe"
+          elif [[ "${{ matrix.platform }}" == "linux" ]]; then
+            mv "${{ matrix.binary_name }}" "dist/dpd-updater-linux-$VERSION"
+          elif [[ "${{ matrix.platform }}" == "macos" ]]; then
+            # For macOS, just the binary for now, can be improved to .app later
+            mv "${{ matrix.binary_name }}" "dist/dpd-updater-macos-$VERSION"
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: resources/dpd-updater-go/dist/*
+
+  release:
+    name: Release
+    needs: [calculate-version, build]
+    if: success()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Tag Release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ needs.calculate-version.outputs.tag }}
+          git push origin ${{ needs.calculate-version.outputs.tag }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.calculate-version.outputs.tag }}
+          name: DPD Updater v${{ needs.calculate-version.outputs.version }}
+          draft: true
+          prerelease: false
+          files: |
+            artifacts/dpd-updater-windows/*.exe
+            artifacts/dpd-updater-linux/*
+            artifacts/dpd-updater-mac/*
