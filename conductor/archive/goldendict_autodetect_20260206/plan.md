@@ -22,16 +22,16 @@
 
 ## Phase 2: UI Integration & User Guidance
 
-- [~] Task: Update `ui.SetupWizard` to invoke the auto-detection logic during initialization.
-- [~] Task: Modify the folder selection screen to pre-fill the detected path and show an "Auto-detected" status message.
-- [~] Task: Implement the "Best Practice Guidance" tip for fragmented folder structures.
-- [~] Task: Ensure the manual file picker remains functional and overrides any auto-detected path.
-- [~] Task: Implement error handling (toast/warning) for cases where auto-detection fails.
+- [x] Task: Update `ui.SetupWizard` to invoke the auto-detection logic during initialization.
+- [x] Task: Modify the folder selection screen to pre-fill the detected path and show an "Auto-detected" status message.
+- [x] Task: Implement the "Best Practice Guidance" tip for fragmented folder structures.
+- [x] Task: Ensure the manual file picker remains functional and overrides any auto-detected path.
+- [x] Task: Implement error handling (toast/warning) for cases where auto-detection fails.
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: UI Integration & User Guidance' (Protocol in workflow.md)
 
 ## Phase 3: Finalization & Documentation
 
-- [ ] Task: Run project-wide linting and formatting (`uv run ruff check --fix`, `uv run ruff format`).
-- [ ] Task: Update `docs/goldendict_config.md` with technical details of the implementation.
-- [ ] Task: Update `README.md` if any new configuration flags or behaviors were added.
-- [ ] Task: Conductor - User Manual Verification 'Phase 3: Finalization & Documentation' (Protocol in workflow.md)
+- [x] Task: Run project-wide linting and formatting (`uv run ruff check --fix`, `uv run ruff format`).
+- [x] Task: Update `docs/goldendict_config.md` with technical details of the implementation.
+- [x] Task: Update `README.md` if any new configuration flags or behaviors were added.
+- [x] Task: Conductor - User Manual Verification 'Phase 3: Finalization & Documentation' (Protocol in workflow.md)
