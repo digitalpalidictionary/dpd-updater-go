@@ -1,14 +1,23 @@
 package main
 
 import (
-	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/widget"
+	"log"
+
+	"github.com/digitalpalidictionary/dpd-updater-go/internal/config"
+	"github.com/digitalpalidictionary/dpd-updater-go/internal/ui"
 )
 
 func main() {
-	myApp := app.New()
-	myWindow := myApp.NewWindow("DPD Updater")
+	cm, err := config.NewConfigManager()
+	if err != nil {
+		log.Fatalf("Failed to initialize config manager: %v", err)
+	}
 
-	myWindow.SetContent(widget.NewLabel("Hello DPD!"))
-	myWindow.ShowAndRun()
+	cfg, err := cm.LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	appUI := ui.NewUI(cfg, cm)
+	appUI.Start()
 }
