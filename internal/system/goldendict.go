@@ -1,6 +1,7 @@
 package system
 
 import (
+	"encoding/xml"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -146,4 +147,115 @@ func (gm *GoldenDictManager) FindExecutable() (string, error) {
 	}
 
 	return "", os.ErrNotExist
+}
+
+// GetGoldenDictConfigPath returns the platform-specific path to the GoldenDict config file.
+func GetGoldenDictConfigPath() (string, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+
+	folderName := "GoldenDict"
+	if runtime.GOOS == "linux" {
+		folderName = "goldendict"
+	}
+
+	return filepath.Join(configDir, folderName, "config"), nil
+}
+
+// GDPath represents a dictionary path entry in GoldenDict config
+type GDPath struct {
+	Path      string
+	Recursive bool
+	Enabled   bool
+}
+
+// xml structures for parsing
+type gdConfigXML struct {
+	Paths struct {
+		Path []struct {
+			Recursive string `xml:"recursive,attr"`
+			Enabled   string `xml:"enabled,attr"`
+			Value     string `xml:",chardata"`
+		} `xml:"path"`
+	} `xml:"paths"`
+}
+
+// ParseGoldenDictPaths reads the config file and returns a list of enabled dictionary paths.
+func ParseGoldenDictPaths(configPath string) ([]GDPath, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var config gdConfigXML
+	if err := xml.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	var results []GDPath
+	for _, p := range config.Paths.Path {
+		enabled := isTrue(p.Enabled)
+		if !enabled {
+			continue
+		}
+
+		results = append(results, GDPath{
+			Path:      p.Value,
+			Recursive: isTrue(p.Recursive),
+			Enabled:   enabled,
+		})
+	}
+
+	return results, nil
+}
+
+func isTrue(s string) bool {
+	s = strings.ToLower(s)
+	return s == "true" || s == "1" || s == "yes" || s == "on"
+}
+
+// AnalyzeGoldenDictPaths analyzes the list of paths and returns a suggested installation folder.
+// Returns an empty string if no suitable suggestion is found.
+func AnalyzeGoldenDictPaths(paths []GDPath) string {
+	if len(paths) == 0 {
+		return ""
+	}
+
+	if len(paths) == 1 {
+		if paths[0].Recursive {
+			return filepath.Clean(paths[0].Path)
+		}
+		return ""
+	}
+
+	common := filepath.Clean(paths[0].Path)
+	for _, p := range paths[1:] {
+		path := filepath.Clean(p.Path)
+		// Iteratively move up common until it contains path
+		for {
+			rel, err := filepath.Rel(common, path)
+			if err == nil && !strings.HasPrefix(rel, "..") {
+				break // common is parent of path
+			}
+
+			parent := filepath.Dir(common)
+			if parent == common {
+				// We reached the root.
+				// If we are at root, we stop here.
+				common = parent
+				break
+			}
+			common = parent
+		}
+	}
+
+	// If the common path is the root directory, we consider it "no common parent"
+	// because suggesting the root of the drive is rarely desired.
+	if filepath.Dir(common) == common || common == "." || common == "" {
+		return ""
+	}
+
+	return common
 }
