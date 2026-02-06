@@ -40,3 +40,19 @@ To programmatically determine which dictionary folders are active and whether th
     -   `recursive="false"`: GoldenDict only scans the top-level files in that folder.
 
 These settings correspond to the UI found in **F3 (Dictionaries) -> Sources -> Files**.
+
+## 5. Programmatic Auto-Detection (Implementation)
+
+The DPD Updater implements auto-detection using the following logic:
+
+1.  **Platform Resolution:** 
+    - Uses `os.UserConfigDir()` to find the base config directory.
+    - Appends `GoldenDict` (Windows/macOS) or `goldendict` (Linux) plus the `config` file name.
+2.  **Robust Parsing:**
+    - Uses Go's `encoding/xml` to unmarshal the `<paths>` section.
+    - **Note:** The `enabled` attribute is treated as optional. If missing, it defaults to `true`.
+    - Handles multiple truthy values for attributes (`true`, `1`, `yes`, `on`).
+3.  **Suggestion Heuristics:**
+    - **Single Path:** If only one recursive path is found, it is suggested directly.
+    - **Multiple Paths:** If multiple paths exist, the updater calculates the **Longest Common Parent**. If a common parent is found (and is not the drive root), it is suggested.
+    - **Validation:** Suggested paths are always verified for existence and basic dictionary content indicators before being pre-filled in the UI.

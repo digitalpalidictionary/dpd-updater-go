@@ -196,7 +196,13 @@ func ParseGoldenDictPaths(configPath string) ([]GDPath, error) {
 
 	var results []GDPath
 	for _, p := range config.Paths.Path {
-		enabled := isTrue(p.Enabled)
+		// If "enabled" attribute is missing, default to true
+		// If present, check if it's "true", "1", etc.
+		enabled := true
+		if p.Enabled != "" {
+			enabled = isTrue(p.Enabled)
+		}
+
 		if !enabled {
 			continue
 		}

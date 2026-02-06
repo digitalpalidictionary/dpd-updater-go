@@ -51,8 +51,9 @@ func TestParseGoldenDictPaths(t *testing.T) {
 <config>
   <paths>
     <path recursive="true" enabled="true">/path/to/recursive</path>
-    <path recursive="false" enabled="true">/path/to/flat</path>
+    <path recursive="0" enabled="true">/path/to/flat</path>
     <path recursive="true" enabled="false">/path/to/disabled</path>
+    <path recursive="1">/path/to/no-enabled-attr</path>
   </paths>
 </config>`
 		tmpFile := filepath.Join(t.TempDir(), "config")
@@ -65,8 +66,8 @@ func TestParseGoldenDictPaths(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
-		if len(paths) != 2 {
-			t.Errorf("Expected 2 paths, got %d", len(paths))
+		if len(paths) != 3 {
+			t.Errorf("Expected 3 paths, got %d", len(paths))
 		}
 
 		// Check first path
@@ -76,10 +77,10 @@ func TestParseGoldenDictPaths(t *testing.T) {
 			}
 		}
 
-		// Check second path
-		if len(paths) > 1 {
-			if paths[1].Path != "/path/to/flat" || paths[1].Recursive {
-				t.Errorf("Mismatch in second path: %+v", paths[1])
+		// Check third path (the one with missing enabled attr)
+		if len(paths) > 2 {
+			if paths[2].Path != "/path/to/no-enabled-attr" || !paths[2].Recursive || !paths[2].Enabled {
+				t.Errorf("Mismatch in third path: %+v", paths[2])
 			}
 		}
 	})

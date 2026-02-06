@@ -27,6 +27,9 @@ func (s *SetupWizard) Render() fyne.CanvasObject {
 	pathLabel := widget.NewLabel("No folder selected")
 	pathLabel.TextStyle = fyne.TextStyle{Italic: true}
 
+	statusLabel := widget.NewLabel("")
+	statusLabel.Wrapping = fyne.TextWrapWord
+
 	var continueBtn *widget.Button
 
 	selectBtn := widget.NewButton("Select Folder", func() {
@@ -37,11 +40,14 @@ func (s *SetupWizard) Render() fyne.CanvasObject {
 			path := list.Path()
 			pathLabel.SetText(path)
 			pathLabel.TextStyle = fyne.TextStyle{Italic: false}
+			statusLabel.SetText("") // Clear auto-detect status on manual selection
 
 			valid, msg := system.ValidateGoldenDictPath(path)
 			if valid {
 				s.ui.State.Config.GoldenDictPath = path
 				continueBtn.Enable()
+			} else {
+				continueBtn.Disable()
 			}
 			dialog.ShowInformation("Path Validation", msg, s.ui.Window)
 		}, s.ui.Window)
@@ -53,11 +59,51 @@ func (s *SetupWizard) Render() fyne.CanvasObject {
 	})
 	continueBtn.Disable()
 
+	// Auto-detection logic
+	go func() {
+		configPath, err := system.GetGoldenDictConfigPath()
+		if err != nil {
+			statusLabel.SetText("Could not find GoldenDict config.")
+			return
+		}
+
+		paths, err := system.ParseGoldenDictPaths(configPath)
+		if err != nil {
+			statusLabel.SetText("Could not read GoldenDict config.")
+			return
+		}
+
+		suggested := system.AnalyzeGoldenDictPaths(paths)
+
+		if suggested != "" {
+			pathLabel.SetText(suggested)
+			pathLabel.TextStyle = fyne.TextStyle{Italic: false}
+
+			valid, _ := system.ValidateGoldenDictPath(suggested)
+
+			if valid {
+				s.ui.State.Config.GoldenDictPath = suggested
+				continueBtn.Enable()
+				statusLabel.SetText("✓ Auto-detected from GoldenDict settings.")
+			} else {
+				// If validation fails, we don't pre-fill or enable, but we don't show an error either
+				// to avoid confusing the user with a broken path.
+				pathLabel.SetText("No folder selected")
+				pathLabel.TextStyle = fyne.TextStyle{Italic: true}
+			}
+		} else {
+			if len(paths) > 0 {
+				statusLabel.SetText("ℹ Tip: Organize your dictionaries into a single master folder (e.g., Documents/GoldenDict) for easier management.")
+			}
+		}
+	}()
+
 	content := container.NewVBox(
 		title,
 		widget.NewSeparator(),
 		intro,
 		container.NewHBox(selectBtn, pathLabel),
+		statusLabel,
 		layout.NewSpacer(),
 		container.NewHBox(layout.NewSpacer(), continueBtn),
 	)
