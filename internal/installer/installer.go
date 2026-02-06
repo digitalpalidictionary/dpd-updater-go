@@ -2,6 +2,7 @@ package installer
 
 import (
 	"archive/zip"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,10 +35,15 @@ func (i *Installer) reportProgress(message string, percentage int) {
 	}
 }
 
-func (i *Installer) DownloadRelease(url, destDir string) (string, error) {
+func (i *Installer) DownloadRelease(ctx context.Context, url, destDir string) (string, error) {
 	i.reportProgress("Starting download...", 0)
 
-	resp, err := i.Client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := i.Client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -64,28 +70,34 @@ func (i *Installer) DownloadRelease(url, destDir string) (string, error) {
 
 	buffer := make([]byte, 8192)
 	for {
-		n, err := resp.Body.Read(buffer)
-		if n > 0 {
-			out.Write(buffer[:n])
-			downloaded += int64(n)
-			if totalSize > 0 {
-				percentage := int((float64(downloaded) / float64(totalSize)) * 50)
-				i.reportProgress(fmt.Sprintf("Downloading... %.1f / %.1f MB", float64(downloaded)/1024/1024, float64(totalSize)/1024/1024), percentage)
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		default:
+			n, err := resp.Body.Read(buffer)
+			if n > 0 {
+				out.Write(buffer[:n])
+				downloaded += int64(n)
+				if totalSize > 0 {
+					percentage := int((float64(downloaded) / float64(totalSize)) * 50)
+					i.reportProgress(fmt.Sprintf("Downloading... %.1f / %.1f MB", float64(downloaded)/1024/1024, float64(totalSize)/1024/1024), percentage)
+				}
 			}
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", err
+			if err == io.EOF {
+				goto Done
+			}
+			if err != nil {
+				return "", err
+			}
 		}
 	}
 
+Done:
 	i.reportProgress("Download complete", 50)
 	return destPath, nil
 }
 
-func (i *Installer) BackupExisting(gdPath string) (string, error) {
+func (i *Installer) BackupExisting(ctx context.Context, gdPath string) (string, error) {
 	if !i.Config.BackupBeforeUpdate {
 		return "", nil
 	}
@@ -106,17 +118,23 @@ func (i *Installer) BackupExisting(gdPath string) (string, error) {
 
 	backedUp := false
 	for _, entry := range entries {
-		name := entry.Name()
-		if stringsHasPrefix(name, "dpd") && name != filepath.Base(backupDir) {
-			src := filepath.Join(gdPath, name)
-			dst := filepath.Join(backupDir, name)
-			if entry.IsDir() {
-				if err := copyDir(src, dst); err == nil {
-					backedUp = true
-				}
-			} else {
-				if err := copyFile(src, dst); err == nil {
-					backedUp = true
+		select {
+		case <-ctx.Done():
+			os.RemoveAll(backupDir)
+			return "", ctx.Err()
+		default:
+			name := entry.Name()
+			if stringsHasPrefix(name, "dpd") && name != filepath.Base(backupDir) {
+				src := filepath.Join(gdPath, name)
+				dst := filepath.Join(backupDir, name)
+				if entry.IsDir() {
+					if err := copyDir(src, dst); err == nil {
+						backedUp = true
+					}
+				} else {
+					if err := copyFile(src, dst); err == nil {
+						backedUp = true
+					}
 				}
 			}
 		}
@@ -131,12 +149,12 @@ func (i *Installer) BackupExisting(gdPath string) (string, error) {
 	return "", nil
 }
 
-func (i *Installer) InstallUpdate(zipPath, gdPath string) error {
+func (i *Installer) InstallUpdate(ctx context.Context, zipPath, gdPath string) error {
 	i.reportProgress("Extracting files...", 60)
 	extractDir := filepath.Join(gdPath, "_dpd_update_temp")
 	os.RemoveAll(extractDir)
 
-	if err := unzip(zipPath, extractDir); err != nil {
+	if err := unzip(ctx, zipPath, extractDir); err != nil {
 		return err
 	}
 
@@ -147,16 +165,20 @@ func (i *Installer) InstallUpdate(zipPath, gdPath string) error {
 	}
 
 	for _, entry := range entries {
-		src := filepath.Join(extractDir, entry.Name())
-		dst := filepath.Join(gdPath, entry.Name())
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			src := filepath.Join(extractDir, entry.Name())
+			dst := filepath.Join(gdPath, entry.Name())
 
-		os.RemoveAll(dst)
-		if err := os.Rename(src, dst); err != nil {
-			// Fallback if rename fails (e.g. cross-device)
-			if entry.IsDir() {
-				copyDir(src, dst)
-			} else {
-				copyFile(src, dst)
+			os.RemoveAll(dst)
+			if err := os.Rename(src, dst); err != nil {
+				if entry.IsDir() {
+					copyDir(src, dst)
+				} else {
+					copyFile(src, dst)
+				}
 			}
 		}
 	}
@@ -204,7 +226,7 @@ func copyDir(src, dst string) error {
 	return nil
 }
 
-func unzip(src, dest string) error {
+func unzip(ctx context.Context, src, dest string) error {
 	r, err := zip.OpenReader(src)
 	if err != nil {
 		return err
@@ -212,32 +234,37 @@ func unzip(src, dest string) error {
 	defer r.Close()
 
 	for _, f := range r.File {
-		fpath := filepath.Join(dest, f.Name)
-		if f.FileInfo().IsDir() {
-			os.MkdirAll(fpath, os.ModePerm)
-			continue
-		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			fpath := filepath.Join(dest, f.Name)
+			if f.FileInfo().IsDir() {
+				os.MkdirAll(fpath, os.ModePerm)
+				continue
+			}
 
-		if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
-			return err
-		}
+			if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+				return err
+			}
 
-		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-		if err != nil {
-			return err
-		}
+			outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+			if err != nil {
+				return err
+			}
 
-		rc, err := f.Open()
-		if err != nil {
-			return err
-		}
+			rc, err := f.Open()
+			if err != nil {
+				return err
+			}
 
-		_, err = io.Copy(outFile, rc)
-		outFile.Close()
-		rc.Close()
+			_, err = io.Copy(outFile, rc)
+			outFile.Close()
+			rc.Close()
 
-		if err != nil {
-			return err
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
