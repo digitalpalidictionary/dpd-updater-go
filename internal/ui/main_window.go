@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -44,29 +45,25 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 	latestVerBind.Set("Latest: Checking...")
 	
 	statusBind := binding.NewString()
-	statusBind.Set("")
+	statusBind.Set("Ready")
 
 	progressBind := binding.NewFloat()
 	progressBind.Set(0.0)
 
+	progressTextBind := binding.NewString()
+	progressTextBind.Set("")
+
 	currentVersion := widget.NewLabelWithData(currentVerBind)
 	latestVersion := widget.NewLabelWithData(latestVerBind)
 	statusLabel := widget.NewLabelWithData(statusBind)
-
-	logList := widget.NewList(
-		func() int { return len(u.State.Logs) },
-		func() fyne.CanvasObject { return widget.NewLabel("") },
-		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			u.State.RLock()
-			defer u.State.RUnlock()
-			if id < len(u.State.Logs) {
-				obj.(*widget.Label).SetText(u.State.Logs[id])
-			}
-		},
-	)
+	statusLabel.TextStyle = fyne.TextStyle{Italic: true}
 
 	progress := widget.NewProgressBarWithData(progressBind)
-	progress.Hide()
+	progressLabel := widget.NewLabelWithData(progressTextBind)
+	
+	// Horizontal progress row: [ ProgressBar ] [ MB / MB ]
+	progressRow := container.NewBorder(nil, nil, nil, progressLabel, progress)
+	progressRow.Hide()
 
 	var updateBtn *widget.Button
 	var checkBtn *widget.Button
@@ -75,10 +72,6 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 	cancelBtn = widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
 		if m.updateCancel != nil {
 			m.updateCancel()
-			u.State.AddLog("Update cancelled by user.")
-			m.runOnMain(func() {
-				logList.Refresh()
-			})
 		}
 	})
 	cancelBtn.Hide()
@@ -89,17 +82,25 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 		statusBind.Set("Checking for updates...")
 
 		go func() {
+			if u.State.Config.GoldenDictPath != "" {
+				if version, err := system.ScanForVersion(u.State.Config.GoldenDictPath); err == nil {
+					if version != u.State.Config.InstalledVersion {
+						u.State.Lock()
+						u.State.Config.InstalledVersion = version
+						u.ConfigManager.SaveConfig(u.State.Config)
+						u.State.Unlock()
+						currentVerBind.Set(fmt.Sprintf("Installed: %s", version))
+					}
+				}
+			}
+
 			client := github.NewGitHubClient()
 			release, err := client.GetLatestRelease()
 
 			if err != nil {
-				u.State.AddLog(fmt.Sprintf("Error checking updates: %v", err))
-				statusBind.Set("Error checking updates")
+				statusBind.Set(fmt.Sprintf("Error: %v", err))
 				u.State.SetProcessing(false)
-				m.runOnMain(func() {
-					checkBtn.Enable()
-					logList.Refresh()
-				})
+				m.runOnMain(func() { checkBtn.Enable() })
 				return
 			}
 
@@ -121,7 +122,6 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 					updateBtn.Disable()
 				}
 				checkBtn.Enable()
-				logList.Refresh()
 			})
 		}()
 	}
@@ -137,7 +137,7 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 		m.runOnMain(func() {
 			updateBtn.Disable()
 			checkBtn.Disable()
-			progress.Show()
+			progressRow.Show()
 			cancelBtn.Show()
 		})
 
@@ -145,7 +145,7 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 			defer func() {
 				m.runOnMain(func() {
 					cancelBtn.Hide()
-					progress.Hide()
+					progressRow.Hide()
 					checkBtn.Enable()
 				})
 				u.State.SetProcessing(false)
@@ -153,17 +153,23 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 
 			gm := system.NewGoldenDictManager()
 			if running, _ := gm.IsRunning(); running {
-				u.State.AddLog("Closing GoldenDict...")
-				m.runOnMain(func() { logList.Refresh() })
+				statusBind.Set("Closing GoldenDict...")
 				gm.Close(10 * time.Second)
 			}
 
 			inst := installer.NewInstaller(u.State.Config, func(msg string, p int) {
-				u.State.SetStatus(msg, float64(p)/100.0)
 				m.runOnMain(func() {
 					progressBind.Set(float64(p) / 100.0)
-					logList.Refresh()
-					logList.ScrollToBottom()
+					
+					if strings.HasPrefix(msg, "Downloading...") {
+						// Extract just the numbers: "5.1 / 257.7 MB"
+						displayMsg := strings.TrimPrefix(msg, "Downloading...")
+						progressTextBind.Set(strings.TrimSpace(displayMsg))
+						statusBind.Set("Downloading update...")
+					} else {
+						statusBind.Set(msg)
+						progressTextBind.Set("")
+					}
 				})
 			})
 
@@ -171,39 +177,33 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 			os.MkdirAll(tempDir, 0755)
 			defer os.RemoveAll(tempDir)
 
-			// 2. Download
 			zipPath, err := inst.DownloadRelease(ctx, u.State.LatestRelease.AssetURL, tempDir)
 			if err != nil {
 				if err == context.Canceled {
-					u.State.AddLog("Download cancelled.")
+					statusBind.Set("Update cancelled.")
 				} else {
-					u.State.AddLog(fmt.Sprintf("Download failed: %v", err))
+					statusBind.Set(fmt.Sprintf("Download failed: %v", err))
 				}
-				m.runOnMain(func() { logList.Refresh() })
 				return
 			}
 
-			// 3. Backup
 			_, err = inst.BackupExisting(ctx, u.State.Config.GoldenDictPath)
 			if err != nil {
 				if err == context.Canceled {
-					u.State.AddLog("Backup cancelled.")
+					statusBind.Set("Update cancelled.")
 				} else {
-					u.State.AddLog(fmt.Sprintf("Backup failed: %v", err))
+					statusBind.Set(fmt.Sprintf("Backup failed: %v", err))
 				}
-				m.runOnMain(func() { logList.Refresh() })
 				return
 			}
 
-			// 4. Install
 			err = inst.InstallUpdate(ctx, zipPath, u.State.Config.GoldenDictPath)
 			if err != nil {
 				if err == context.Canceled {
-					u.State.AddLog("Installation cancelled.")
+					statusBind.Set("Update cancelled.")
 				} else {
-					u.State.AddLog(fmt.Sprintf("Installation failed: %v", err))
+					statusBind.Set(fmt.Sprintf("Installation failed: %v", err))
 				}
-				m.runOnMain(func() { logList.Refresh() })
 			} else {
 				u.State.Lock()
 				u.State.Config.InstalledVersion = u.State.LatestRelease.Version
@@ -211,16 +211,14 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 				u.State.Unlock()
 				
 				currentVerBind.Set(fmt.Sprintf("Installed: %s", u.State.Config.InstalledVersion))
-				u.State.AddLog("Update complete!")
-				u.State.AddLog("Restarting GoldenDict...")
+				statusBind.Set("Update complete! Restarting GoldenDict...")
 				gm.Reopen()
-				m.runOnMain(func() { logList.Refresh() })
 			}
 		}()
 	})
 	updateBtn.Disable()
 
-	settingsBtn := widget.NewButtonWithIcon("Settings", theme.SettingsIcon(), func() {
+	settingsBtn := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
 		m.showSettings()
 	})
 
@@ -235,17 +233,15 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 		),
 	)
 
-	buttons := container.NewHBox(layout.NewSpacer(), checkBtn, updateBtn, layout.NewSpacer())
+	buttons := container.NewHBox(layout.NewSpacer(), checkBtn, updateBtn, cancelBtn, layout.NewSpacer())
 
-	// Progress bar and Cancel button row
-	progressRow := container.NewBorder(nil, nil, nil, cancelBtn, progress)
-
+	// Clean layout: Version info at top, progress/buttons at bottom
 	content := container.NewBorder(
 		top,
 		container.NewVBox(progressRow, buttons),
 		nil,
 		nil,
-		logList,
+		layout.NewSpacer(), // Empty center
 	)
 
 	if u.State.Config.AutoCheckUpdates {
