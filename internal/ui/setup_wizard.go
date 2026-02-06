@@ -37,7 +37,7 @@ func (s *SetupWizard) Render() fyne.CanvasObject {
 			path := list.Path()
 			pathLabel.SetText(path)
 			pathLabel.TextStyle = fyne.TextStyle{Italic: false}
-			
+
 			valid, msg := system.ValidateGoldenDictPath(path)
 			if valid {
 				s.ui.State.Config.GoldenDictPath = path

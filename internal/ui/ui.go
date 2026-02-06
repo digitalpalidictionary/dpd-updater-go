@@ -15,6 +15,7 @@ type UI struct {
 
 func NewUI(cfg *config.Config, cm *config.ConfigManager) *UI {
 	myApp := app.New()
+	myApp.SetIcon(resourceIconPng)
 	myWindow := myApp.NewWindow("DPD Updater")
 	myWindow.Resize(fyne.NewSize(800, 600))
 

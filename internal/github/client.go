@@ -56,7 +56,7 @@ func (gc *GitHubClient) GetLatestRelease() (*ReleaseInfo, error) {
 		PublishedAt time.Time `json:"published_at"`
 		HTMLURL     string    `json:"html_url"`
 		Assets      []struct {
-			Name      string `json:"name"`
+			Name        string `json:"name"`
 			DownloadURL string `json:"browser_download_url"`
 		} `json:"assets"`
 	}

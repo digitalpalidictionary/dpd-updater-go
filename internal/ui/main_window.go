@@ -25,7 +25,7 @@ func NewMainWindow(ui *UI) *MainWindow {
 
 func (m *MainWindow) Render() fyne.CanvasObject {
 	u := m.ui
-	
+
 	title := widget.NewLabelWithStyle("DPD Updater", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 
 	currentVersion := widget.NewLabel(fmt.Sprintf("Installed: %s", u.State.Config.InstalledVersion))
@@ -50,11 +50,11 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 		u.State.SetProcessing(true)
 		checkBtn.Disable()
 		statusLabel.SetText("Checking for updates...")
-		
+
 		go func() {
 			client := github.NewGitHubClient()
 			release, err := client.GetLatestRelease()
-			
+
 			u.State.Lock()
 			if err != nil {
 				u.State.Logs = append(u.State.Logs, fmt.Sprintf("Error checking updates: %v", err))
@@ -66,7 +66,7 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 			u.State.Unlock()
 
 			latestVersion.SetText(fmt.Sprintf("Latest: %s", release.Version))
-			
+
 			comp := github.CompareVersions(u.State.Config.InstalledVersion, release.Version)
 			if comp < 0 {
 				statusLabel.SetText("Update available!")
@@ -75,7 +75,7 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 				statusLabel.SetText("You are up to date.")
 				updateBtn.Disable()
 			}
-			
+
 			u.State.SetProcessing(false)
 			checkBtn.Enable()
 		}()
@@ -98,7 +98,7 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 
 			inst := installer.NewInstaller(u.State.Config, func(msg string, p int) {
 				u.State.SetStatus(msg, float64(p)/100.0)
-				progress.SetValue(float64(p)/100.0)
+				progress.SetValue(float64(p) / 100.0)
 				u.Window.Canvas().Refresh(logList)
 				logList.ScrollToBottom()
 			})
@@ -129,7 +129,7 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 				u.ConfigManager.SaveConfig(u.State.Config)
 				currentVersion.SetText(fmt.Sprintf("Installed: %s", u.State.Config.InstalledVersion))
 				u.State.AddLog("Update complete!")
-				
+
 				u.State.AddLog("Restarting GoldenDict...")
 				gm.Reopen()
 			}

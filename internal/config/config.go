@@ -7,10 +7,10 @@ import (
 )
 
 type Config struct {
-	GoldenDictPath      string `json:"goldendict_path"`
-	InstalledVersion    string `json:"installed_version"`
-	AutoCheckUpdates    bool   `json:"auto_check_updates"`
-	BackupBeforeUpdate  bool   `json:"backup_before_update"`
+	GoldenDictPath     string `json:"goldendict_path"`
+	InstalledVersion   string `json:"installed_version"`
+	AutoCheckUpdates   bool   `json:"auto_check_updates"`
+	BackupBeforeUpdate bool   `json:"backup_before_update"`
 }
 
 type ConfigManager struct {

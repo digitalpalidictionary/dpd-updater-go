@@ -9,13 +9,13 @@ import (
 
 type AppState struct {
 	sync.RWMutex
-	Config         *config.Config
-	LatestRelease  *github.ReleaseInfo
-	IsUpdateAvail  bool
-	IsProcessing   bool
-	StatusMessage  string
-	Progress       float64
-	Logs           []string
+	Config        *config.Config
+	LatestRelease *github.ReleaseInfo
+	IsUpdateAvail bool
+	IsProcessing  bool
+	StatusMessage string
+	Progress      float64
+	Logs          []string
 }
 
 func NewAppState(cfg *config.Config) *AppState {
