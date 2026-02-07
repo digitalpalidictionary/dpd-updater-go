@@ -5,6 +5,7 @@ import (
 
 	"github.com/digitalpalidictionary/dpd-updater-go/internal/config"
 	"github.com/digitalpalidictionary/dpd-updater-go/internal/github"
+	"github.com/digitalpalidictionary/dpd-updater-go/internal/system"
 )
 
 type AppState struct {
@@ -16,6 +17,7 @@ type AppState struct {
 	StatusMessage string
 	Progress      float64
 	Logs          []string
+	DPDInstances  []system.DPDInfo
 }
 
 func NewAppState(cfg *config.Config) *AppState {

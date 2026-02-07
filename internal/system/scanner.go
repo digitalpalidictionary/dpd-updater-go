@@ -2,10 +2,40 @@ package system
 
 import (
 	"bufio"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// FindAllDPDInstances recursively scans root for specific DPD ifo files.
+func FindAllDPDInstances(root string) ([]DPDInfo, error) {
+	var instances []DPDInfo
+	allowed := map[string]bool{
+		"dpd.ifo":                true,
+		"dpd-deconstructor.ifo":  true,
+		"dpd-deconstructor2.ifo": true,
+		"dpd-grammar.ifo":        true,
+		"dpd-variants.ifo":       true,
+	}
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		fname := strings.ToLower(d.Name())
+		if !d.IsDir() && allowed[fname] {
+			info, err := ParseIFO(path)
+			if err == nil {
+				instances = append(instances, *info)
+			}
+		}
+		return nil
+	})
+
+	return instances, err
+}
 
 func ScanForVersion(gdPath string) (string, error) {
 	if gdPath == "" {

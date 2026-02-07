@@ -189,6 +189,23 @@ func (i *Installer) InstallUpdate(ctx context.Context, zipPath, gdPath string) e
 	return nil
 }
 
+func DeleteFolders(paths []string) error {
+	for _, p := range paths {
+		// We delete the parent directory of dpd.ifo because dpd.ifo is inside the dictionary folder
+		dir := filepath.Dir(p)
+		// Safety check: ensure we are not deleting root or something unexpected
+		// Ideally we should check if it's inside the GoldenDict folder but for now basic check
+		if dir == "." || dir == "/" || len(dir) < 4 {
+			return fmt.Errorf("unsafe deletion path: %s", dir)
+		}
+
+		if err := os.RemoveAll(dir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Helper functions (simplified)
 
 func stringsHasPrefix(s, prefix string) bool {

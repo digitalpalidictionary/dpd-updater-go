@@ -8,6 +8,7 @@ Standalone DPD Updater written in Go using the Fyne GUI toolkit. This applicatio
 - **Automatic Path Detection:** Attempts to find GoldenDict configuration paths.
 - **GitHub Integration:** Fetches the latest releases directly from GitHub.
 - **Transactional Updates:** Includes backup and temporary extraction for safety.
+- **Duplicate Detection:** Automatically identifies and helps clean up multiple DPD copies in your GoldenDict folder to ensure the best performance.
 
 ## Installation
 You can download the latest pre-compiled binaries from the GitHub Releases page.
