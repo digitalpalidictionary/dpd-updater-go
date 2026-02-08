@@ -105,12 +105,10 @@ jobs:
         run: |
           go install github.com/akavel/rsrc@latest
           
-          # Create simple ICO converter script
-          echo 'using System; using System.Drawing; using System.IO; class P { static void Main(string[] a) { Image i = Image.FromFile(a[0]); int[] s = {16,32,48,64,128,256}; using (FileStream f = new FileStream(a[1], FileMode.Create)) { BinaryWriter w = new BinaryWriter(f); w.Write((short)0); w.Write((short)1); w.Write((short)6); int o = 6 + 96; foreach (int z in s) { w.Write((byte)z); w.Write((byte)z); w.Write((byte)0); w.Write((byte)0); w.Write((short)1); w.Write((short)32); w.Write((int)0); w.Write((int)o); o += z*z*4+40; } foreach (int z in s) { using (Bitmap b = new Bitmap(i,z,z)) { using (MemoryStream m = new MemoryStream()) { b.Save(m, System.Drawing.Imaging.ImageFormat.Png); w.Write(m.ToArray()); } } } } } }' > c.cs
+          # Use pre-built ICO file
+          copy assets\icon.ico windows\icon.ico
           
-          Add-Type -TypeDefinition (Get-Content c.cs -Raw) -ReferencedAssemblies System.Drawing
-          [P]::Main(@("assets\icon.png", "windows\icon.ico"))
-          
+          # Embed manifest and icon
           rsrc -manifest windows\manifest.xml -ico windows\icon.ico -o rsrc.syso
           
           $VERSION = "${{ needs.calculate-version.outputs.version }}"
@@ -128,11 +126,70 @@ jobs:
         if: matrix.platform == 'macos'
         run: |
           VERSION="${{ needs.calculate-version.outputs.version }}"
-          go install fyne.io/fyne/v2/cmd/fyne@latest
-          fyne package -os darwin -name "DPD Updater" -icon assets/icon.png -appVersion $VERSION -appID net.dpdict.dpd-updater
+          APP_NAME="DPD Updater"
+          BUNDLE_ID="net.dpdict.dpd-updater"
+          
+          # Build the binary
+          go build -ldflags="-s -w" -o dpd-updater ./cmd/dpd-updater
+          
+          # Create .app bundle structure manually
+          mkdir -p "${APP_NAME}.app/Contents/MacOS"
+          mkdir -p "${APP_NAME}.app/Contents/Resources"
+          
+          # Copy binary
+          cp dpd-updater "${APP_NAME}.app/Contents/MacOS/"
+          
+          # Convert PNG to icns for macOS
+          mkdir -p icon.iconset
+          sips -z 16 16 assets/icon.png --out icon.iconset/icon_16x16.png
+          sips -z 32 32 assets/icon.png --out icon.iconset/icon_16x16@2x.png
+          sips -z 32 32 assets/icon.png --out icon.iconset/icon_32x32.png
+          sips -z 64 64 assets/icon.png --out icon.iconset/icon_32x32@2x.png
+          sips -z 128 128 assets/icon.png --out icon.iconset/icon_128x128.png
+          sips -z 256 256 assets/icon.png --out icon.iconset/icon_128x128@2x.png
+          sips -z 256 256 assets/icon.png --out icon.iconset/icon_256x256.png
+          sips -z 512 512 assets/icon.png --out icon.iconset/icon_256x256@2x.png
+          sips -z 512 512 assets/icon.png --out icon.iconset/icon_512x512.png
+          sips -z 1024 1024 assets/icon.png --out icon.iconset/icon_512x512@2x.png
+          iconutil -c icns icon.iconset -o "${APP_NAME}.app/Contents/Resources/icon.icns"
+          rm -rf icon.iconset
+          
+          # Create Info.plist
+          cat > "${APP_NAME}.app/Contents/Info.plist" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleDevelopmentRegion</key>
+              <string>en</string>
+              <key>CFBundleExecutable</key>
+              <string>dpd-updater</string>
+              <key>CFBundleIconFile</key>
+              <string>icon.icns</string>
+              <key>CFBundleIdentifier</key>
+              <string>${BUNDLE_ID}</string>
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
+              <key>CFBundleName</key>
+              <string>${APP_NAME}</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${VERSION}</string>
+              <key>CFBundleVersion</key>
+              <string>${VERSION}</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>10.11</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+          
+          # Create distribution
           mkdir -p dist
-          hdiutil create -volname "DPD Updater" -srcfolder "DPD Updater.app" -ov -format UDZO "dist/dpd-updater-macos-$VERSION.dmg"
-          zip -r "dist/dpd-updater-macos-$VERSION.zip" "DPD Updater.app"
+          hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_NAME}.app" -ov -format UDZO "dist/dpd-updater-macos-${VERSION}.dmg"
+          zip -r "dist/dpd-updater-macos-${VERSION}.zip" "${APP_NAME}.app"
         shell: bash
 
       - name: Build Linux Packages
@@ -141,35 +198,6 @@ jobs:
           VERSION="${{ needs.calculate-version.outputs.version }}"
           mkdir -p dist
           go build -ldflags="-s -w" -o dpd-updater ./cmd/dpd-updater
-          
-          # AppImage
-          mkdir -p DPD_Updater.AppDir/usr/bin
-          mkdir -p DPD_Updater.AppDir/usr/share/applications
-          mkdir -p DPD_Updater.AppDir/usr/share/icons/hicolor/256x256/apps
-          cp dpd-updater DPD_Updater.AppDir/usr/bin/
-          cp assets/icon.png DPD_Updater.AppDir/usr/share/icons/hicolor/256x256/apps/dpd-updater.png
-          
-          echo '[Desktop Entry]' > DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
-          echo 'Name=DPD Updater' >> DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
-          echo 'Comment=Standalone DPD Updater for GoldenDict' >> DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
-          echo 'Exec=dpd-updater' >> DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
-          echo 'Icon=dpd-updater' >> DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
-          echo 'Type=Application' >> DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
-          echo 'Categories=Office;Dictionary;' >> DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
-          
-          echo '#!/bin/bash' > DPD_Updater.AppDir/AppRun
-          echo 'SELF=$(readlink -f "$0")' >> DPD_Updater.AppDir/AppRun
-          echo 'HERE=${SELF%/*}' >> DPD_Updater.AppDir/AppRun
-          echo 'cd "${HERE}/usr/bin"' >> DPD_Updater.AppDir/AppRun
-          echo 'exec "./dpd-updater" "$@"' >> DPD_Updater.AppDir/AppRun
-          chmod +x DPD_Updater.AppDir/AppRun
-          
-          ln -s usr/share/applications/dpd-updater.desktop DPD_Updater.AppDir/dpd-updater.desktop
-          ln -s usr/share/icons/hicolor/256x256/apps/dpd-updater.png DPD_Updater.AppDir/dpd-updater.png
-          
-          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool-x86_64.AppImage
-          ./appimagetool-x86_64.AppImage DPD_Updater.AppDir "dist/dpd-updater-linux-$VERSION.AppImage"
           
           # .deb package
           mkdir -p dpd-updater_${VERSION}_amd64/DEBIAN
@@ -200,6 +228,8 @@ jobs:
           
           dpkg-deb --build dpd-updater_${VERSION}_amd64
           mv dpd-updater_${VERSION}_amd64.deb dist/
+          
+          # Copy plain binary
           cp dpd-updater "dist/dpd-updater-linux-$VERSION"
           chmod +x "dist/dpd-updater-linux-$VERSION"
         shell: bash
@@ -278,11 +308,9 @@ jobs:
             Download `dpd-updater-macos-VERSION.dmg`, open it, and drag "DPD Updater" to Applications
 
             ### Linux
-            **Option 1 - AppImage (Recommended):** Download `dpd-updater-linux-VERSION.AppImage`, make it executable (`chmod +x`), and run
+            **Option 1 - .deb (Debian/Ubuntu, Recommended):** Download and install with `sudo dpkg -i dpd-updater_VERSION_amd64.deb`
             
-            **Option 2 - .deb (Debian/Ubuntu):** Download and install with `sudo dpkg -i dpd-updater_VERSION_amd64.deb`
-            
-            **Option 3 - Portable:** Download `dpd-updater-linux-VERSION` and run directly
+            **Option 2 - Portable:** Download `dpd-updater-linux-VERSION`, make it executable (`chmod +x`), and run
           files: |
             artifacts/dpd-updater-windows/*
             artifacts/dpd-updater-linux/*
