@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" 
+           Name="DPD Updater" 
+           Language="1033" 
+           Version="$(var.Version)" 
+           Manufacturer="Digital Pali Dictionary" 
+           UpgradeCode="a1b2c3d4-e5f6-7890-abcd-ef1234567890">
+    
+    <Package InstallerVersion="200" 
+             Compressed="yes" 
+             InstallScope="perUser" 
+             Platform="x64"
+             Description="DPD Updater for GoldenDict"
+             Comments="Standalone DPD Updater written in Go using the Fyne GUI toolkit"
+             Manufacturer="Digital Pali Dictionary" />
+    
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    
+    <MediaTemplate EmbedCab="yes" />
+    
+    <!-- User Interface -->
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    
+    <!-- Allow per-machine installation (requires admin) -->
+    <Property Id="ALLUSERS" Value="2" />
+    <Property Id="MSIINSTALLPERUSER" Value="1" />
+    
+    <!-- Default installation directory -->
+    <Property Id="INSTALLFOLDER">
+      <RegistrySearch Id="FindInstallLocation" 
+                      Root="HKCU" 
+                      Key="Software\Digital Pali Dictionary\DPD Updater" 
+                      Name="InstallDir" 
+                      Type="raw" />
+    </Property>
+    
+    <!-- Per-user installation -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="ManufacturerFolder" Name="Digital Pali Dictionary">
+          <Directory Id="INSTALLFOLDER" Name="DPD Updater" />
+        </Directory>
+      </Directory>
+      
+      <!-- Start Menu -->
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="DPD Updater" />
+      </Directory>
+    </Directory>
+    
+    <!-- Components -->
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="MainExecutable" Guid="b2c3d4e5-f6a7-8901-bcde-f23456789012">
+        <File Id="DPDUpdaterEXE" 
+              Name="dpd-updater.exe" 
+              Source="dpd-updater.exe" 
+              KeyPath="yes"
+              Icon="icon.ico">
+          <Shortcut Id="startmenuDPDUpdater" 
+                    Directory="ApplicationProgramsFolder" 
+                    Name="DPD Updater"
+                    Icon="icon.ico"
+                    Advertise="yes" />
+        </File>
+        <RegistryValue Root="HKCU" 
+                       Key="Software\Digital Pali Dictionary\DPD Updater" 
+                       Name="InstallDir" 
+                       Type="string" 
+                       Value="[INSTALLFOLDER]" 
+                       KeyPath="no" />
+      </Component>
+      
+      <Component Id="AppIcon" Guid="c3d4e5f6-a7b8-9012-cdef-345678901234">
+        <File Id="IconFile" 
+              Name="icon.ico" 
+              Source="icon.ico" 
+              KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    
+    <Feature Id="ProductFeature" Title="DPD Updater" Level="1">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="AppIcon" />
+    </Feature>
+    
+  </Product>
+</Wix>

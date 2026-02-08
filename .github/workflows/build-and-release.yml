@@ -59,15 +59,12 @@ jobs:
           - platform: windows
             os: windows-latest
             artifact_name: dpd-updater-windows
-            binary_name: dpd-updater.exe
           - platform: macos
             os: macos-latest
             artifact_name: dpd-updater-mac
-            binary_name: dpd-updater
           - platform: linux
             os: ubuntu-latest
             artifact_name: dpd-updater-linux
-            binary_name: dpd-updater
 
     steps:
       - name: Checkout code
@@ -82,35 +79,130 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - name: Install dependencies
+      - name: Install dependencies (Linux)
+        if: matrix.platform == 'linux'
         run: |
-          # Install Fyne dependencies (X11 for Linux)
-          if [ "${{ matrix.platform }}" = "linux" ]; then
-            sudo apt-get update
-            sudo apt-get install -y libgl1-mesa-dev xorg-dev
-          fi
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev
           go mod download
         shell: bash
 
-      - name: Build Executable
+      - name: Install dependencies (Windows)
+        if: matrix.platform == 'windows'
         run: |
-          VERSION="${{ needs.calculate-version.outputs.version }}"
-          go build -ldflags="-s -w" -o "${{ matrix.binary_name }}" ./cmd/dpd-updater
+          choco install wixtoolset --version=3.14.1 -y
+          echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" >> $env:GITHUB_PATH
+          go mod download
+        shell: pwsh
+
+      - name: Install dependencies (macOS)
+        if: matrix.platform == 'macos'
+        run: go mod download
         shell: bash
 
-      - name: Prepare Artifacts
+      - name: Build Windows Executable and MSI
+        if: matrix.platform == 'windows'
+        run: |
+          go install github.com/akavel/rsrc@latest
+          
+          # Create simple ICO converter script
+          echo 'using System; using System.Drawing; using System.IO; class P { static void Main(string[] a) { Image i = Image.FromFile(a[0]); int[] s = {16,32,48,64,128,256}; using (FileStream f = new FileStream(a[1], FileMode.Create)) { BinaryWriter w = new BinaryWriter(f); w.Write((short)0); w.Write((short)1); w.Write((short)6); int o = 6 + 96; foreach (int z in s) { w.Write((byte)z); w.Write((byte)z); w.Write((byte)0); w.Write((byte)0); w.Write((short)1); w.Write((short)32); w.Write((int)0); w.Write((int)o); o += z*z*4+40; } foreach (int z in s) { using (Bitmap b = new Bitmap(i,z,z)) { using (MemoryStream m = new MemoryStream()) { b.Save(m, System.Drawing.Imaging.ImageFormat.Png); w.Write(m.ToArray()); } } } } } }' > c.cs
+          
+          Add-Type -TypeDefinition (Get-Content c.cs -Raw) -ReferencedAssemblies System.Drawing
+          [P]::Main(@("assets\icon.png", "windows\icon.ico"))
+          
+          rsrc -manifest windows\manifest.xml -ico windows\icon.ico -o rsrc.syso
+          
+          $VERSION = "${{ needs.calculate-version.outputs.version }}"
+          go build -ldflags="-s -w" -o dpd-updater.exe ./cmd/dpd-updater
+          
+          candle -arch x64 -dVersion=$VERSION windows\installer.wxs -o installer.wixobj
+          light -ext WixUIExtension -out dpd-updater.msi installer.wixobj
+          
+          mkdir dist
+          copy dpd-updater.exe "dist\dpd-updater-windows-$VERSION.exe"
+          copy dpd-updater.msi "dist\dpd-updater-windows-$VERSION.msi"
+        shell: pwsh
+
+      - name: Build macOS .app Bundle
+        if: matrix.platform == 'macos'
+        run: |
+          VERSION="${{ needs.calculate-version.outputs.version }}"
+          go install fyne.io/fyne/v2/cmd/fyne@latest
+          fyne package -os darwin -name "DPD Updater" -icon assets/icon.png -appVersion $VERSION -appID net.dpdict.dpd-updater
+          mkdir -p dist
+          hdiutil create -volname "DPD Updater" -srcfolder "DPD Updater.app" -ov -format UDZO "dist/dpd-updater-macos-$VERSION.dmg"
+          zip -r "dist/dpd-updater-macos-$VERSION.zip" "DPD Updater.app"
         shell: bash
+
+      - name: Build Linux Packages
+        if: matrix.platform == 'linux'
         run: |
           VERSION="${{ needs.calculate-version.outputs.version }}"
           mkdir -p dist
+          go build -ldflags="-s -w" -o dpd-updater ./cmd/dpd-updater
           
-          if [[ "${{ matrix.platform }}" == "windows" ]]; then
-            mv "${{ matrix.binary_name }}" "dist/dpd-updater-windows-$VERSION.exe"
-          elif [[ "${{ matrix.platform }}" == "linux" ]]; then
-            mv "${{ matrix.binary_name }}" "dist/dpd-updater-linux-$VERSION"
-          elif [[ "${{ matrix.platform }}" == "macos" ]]; then
-            mv "${{ matrix.binary_name }}" "dist/dpd-updater-macos-$VERSION"
-          fi
+          # AppImage
+          mkdir -p DPD_Updater.AppDir/usr/bin
+          mkdir -p DPD_Updater.AppDir/usr/share/applications
+          mkdir -p DPD_Updater.AppDir/usr/share/icons/hicolor/256x256/apps
+          cp dpd-updater DPD_Updater.AppDir/usr/bin/
+          cp assets/icon.png DPD_Updater.AppDir/usr/share/icons/hicolor/256x256/apps/dpd-updater.png
+          
+          echo '[Desktop Entry]' > DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
+          echo 'Name=DPD Updater' >> DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
+          echo 'Comment=Standalone DPD Updater for GoldenDict' >> DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
+          echo 'Exec=dpd-updater' >> DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
+          echo 'Icon=dpd-updater' >> DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
+          echo 'Type=Application' >> DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
+          echo 'Categories=Office;Dictionary;' >> DPD_Updater.AppDir/usr/share/applications/dpd-updater.desktop
+          
+          echo '#!/bin/bash' > DPD_Updater.AppDir/AppRun
+          echo 'SELF=$(readlink -f "$0")' >> DPD_Updater.AppDir/AppRun
+          echo 'HERE=${SELF%/*}' >> DPD_Updater.AppDir/AppRun
+          echo 'cd "${HERE}/usr/bin"' >> DPD_Updater.AppDir/AppRun
+          echo 'exec "./dpd-updater" "$@"' >> DPD_Updater.AppDir/AppRun
+          chmod +x DPD_Updater.AppDir/AppRun
+          
+          ln -s usr/share/applications/dpd-updater.desktop DPD_Updater.AppDir/dpd-updater.desktop
+          ln -s usr/share/icons/hicolor/256x256/apps/dpd-updater.png DPD_Updater.AppDir/dpd-updater.png
+          
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          ./appimagetool-x86_64.AppImage DPD_Updater.AppDir "dist/dpd-updater-linux-$VERSION.AppImage"
+          
+          # .deb package
+          mkdir -p dpd-updater_${VERSION}_amd64/DEBIAN
+          mkdir -p dpd-updater_${VERSION}_amd64/usr/bin
+          mkdir -p dpd-updater_${VERSION}_amd64/usr/share/applications
+          mkdir -p dpd-updater_${VERSION}_amd64/usr/share/icons/hicolor/256x256/apps
+          
+          cp dpd-updater dpd-updater_${VERSION}_amd64/usr/bin/
+          cp assets/icon.png dpd-updater_${VERSION}_amd64/usr/share/icons/hicolor/256x256/apps/dpd-updater.png
+          
+          echo "Package: dpd-updater" > dpd-updater_${VERSION}_amd64/DEBIAN/control
+          echo "Version: $VERSION" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
+          echo "Section: utils" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
+          echo "Priority: optional" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
+          echo "Architecture: amd64" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
+          echo "Depends: libgl1-mesa-glx, libx11-6" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
+          echo "Maintainer: Digital Pali Dictionary" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
+          echo "Description: DPD Updater for GoldenDict" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
+          
+          echo '[Desktop Entry]' > dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
+          echo 'Name=DPD Updater' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
+          echo 'Comment=Standalone DPD Updater for GoldenDict' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
+          echo 'Exec=/usr/bin/dpd-updater' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
+          echo 'Icon=/usr/share/icons/hicolor/256x256/apps/dpd-updater.png' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
+          echo 'Type=Application' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
+          echo 'Categories=Office;Dictionary;' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
+          echo 'Terminal=false' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
+          
+          dpkg-deb --build dpd-updater_${VERSION}_amd64
+          mv dpd-updater_${VERSION}_amd64.deb dist/
+          cp dpd-updater "dist/dpd-updater-linux-$VERSION"
+          chmod +x "dist/dpd-updater-linux-$VERSION"
+        shell: bash
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -140,7 +232,6 @@ jobs:
       - name: Generate Changelog
         id: changelog
         run: |
-          # Get the previous tag (the one before the new tag we're about to create)
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
             CHANGELOG=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD 2>/dev/null || echo "- Initial release")
@@ -172,7 +263,27 @@ jobs:
             ## Changes
 
             ${{ steps.changelog.outputs.changelog }}
+
+            ## Installation
+
+            ### Windows
+            **Option 1 - Installer (Recommended):** Download and run `dpd-updater-windows-VERSION.msi`
+            - No administrator rights required for default "Just me" installation
+            - Creates Start Menu shortcut
+            - Can be uninstalled from Add/Remove Programs
+
+            **Option 2 - Portable:** Download `dpd-updater-windows-VERSION.exe` and run directly
+
+            ### macOS
+            Download `dpd-updater-macos-VERSION.dmg`, open it, and drag "DPD Updater" to Applications
+
+            ### Linux
+            **Option 1 - AppImage (Recommended):** Download `dpd-updater-linux-VERSION.AppImage`, make it executable (`chmod +x`), and run
+            
+            **Option 2 - .deb (Debian/Ubuntu):** Download and install with `sudo dpkg -i dpd-updater_VERSION_amd64.deb`
+            
+            **Option 3 - Portable:** Download `dpd-updater-linux-VERSION` and run directly
           files: |
-            artifacts/dpd-updater-windows/*.exe
+            artifacts/dpd-updater-windows/*
             artifacts/dpd-updater-linux/*
             artifacts/dpd-updater-mac/*
