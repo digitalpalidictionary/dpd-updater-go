@@ -9,7 +9,7 @@
     
     <Package InstallerVersion="200" 
              Compressed="yes" 
-             InstallScope="perUser" 
+             InstallScope="perMachine" 
              Platform="x64"
              Description="DPD Updater for GoldenDict"
              Comments="Standalone DPD Updater written in Go using the Fyne GUI toolkit"
@@ -19,29 +19,25 @@
     
     <MediaTemplate EmbedCab="yes" />
     
-    <!-- Define Icon -->
+    <!-- Define Icon for Add/Remove Programs -->
     <Icon Id="icon.ico" SourceFile="windows\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="icon.ico" />
     
     <!-- User Interface -->
     <UIRef Id="WixUI_InstallDir" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
     
-    <!-- Allow per-machine installation (requires admin) -->
-    <Property Id="ALLUSERS" Value="2" />
-    <Property Id="MSIINSTALLPERUSER" Value="1" />
-    
     <!-- Default installation directory -->
     <Property Id="INSTALLFOLDER">
       <RegistrySearch Id="FindInstallLocation" 
-                      Root="HKCU" 
+                      Root="HKLM" 
                       Key="Software\Digital Pali Dictionary\DPD Updater" 
                       Name="InstallDir" 
                       Type="raw" />
     </Property>
     
-    <!-- Per-user installation -->
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="LocalAppDataFolder">
+      <Directory Id="ProgramFiles64Folder">
         <Directory Id="ManufacturerFolder" Name="Digital Pali Dictionary">
           <Directory Id="INSTALLFOLDER" Name="DPD Updater" />
         </Directory>
@@ -63,9 +59,11 @@
           <Shortcut Id="startmenuDPDUpdater" 
                     Directory="ApplicationProgramsFolder" 
                     Name="DPD Updater"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="icon.ico"
                     Advertise="yes" />
         </File>
-        <RegistryValue Root="HKCU" 
+        <RegistryValue Root="HKLM" 
                        Key="Software\Digital Pali Dictionary\DPD Updater" 
                        Name="InstallDir" 
                        Type="string" 
@@ -81,9 +79,18 @@
       </Component>
     </DirectoryRef>
     
+    <!-- Cleanup Start Menu Folder -->
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="ApplicationShortcutCleanup" Guid="d4e5f6a7-b8c9-0123-def0-456789012345">
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKLM" Key="Software\Digital Pali Dictionary\DPD Updater" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    
     <Feature Id="ProductFeature" Title="DPD Updater" Level="1">
       <ComponentRef Id="MainExecutable" />
       <ComponentRef Id="AppIcon" />
+      <ComponentRef Id="ApplicationShortcutCleanup" />
     </Feature>
     
   </Product>
