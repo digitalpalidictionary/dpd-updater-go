@@ -53,41 +53,31 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 	progressTextBind := binding.NewString()
 	progressTextBind.Set("")
 
-			// Dynamic Version Container
+	// Dynamic Version Container
 
-			versionInfoContainer := container.New(layout.NewCustomPaddedVBoxLayout(0))
+	versionInfoContainer := container.New(layout.NewCustomPaddedVBoxLayout(0))
 
-			
+	latestVersion := widget.NewLabelWithData(latestVerBind)
 
-			latestVersion := widget.NewLabelWithData(latestVerBind)
+	latestVersion.Selectable = true
 
-			latestVersion.Selectable = true
+	statusLabel := widget.NewLabelWithData(statusBind)
 
-			
+	statusLabel.Selectable = true
 
-			statusLabel := widget.NewLabelWithData(statusBind)
+	statusLabel.TextStyle = fyne.TextStyle{Italic: true}
 
-			statusLabel.Selectable = true
+	progress := widget.NewProgressBarWithData(progressBind)
 
-			statusLabel.TextStyle = fyne.TextStyle{Italic: true}
+	progressLabel := widget.NewLabelWithData(progressTextBind)
 
-		
+	progressLabel.Selectable = true
 
-			progress := widget.NewProgressBarWithData(progressBind)
+	// Horizontal progress row: [ ProgressBar ] [ MB / MB ]
 
-			progressLabel := widget.NewLabelWithData(progressTextBind)
+	progressRow := container.NewBorder(nil, nil, nil, progressLabel, progress)
 
-			progressLabel.Selectable = true
-
-			
-
-			// Horizontal progress row: [ ProgressBar ] [ MB / MB ]
-
-			progressRow := container.NewBorder(nil, nil, nil, progressLabel, progress)
-
-			progressRow.Hide()
-
-		
+	progressRow.Hide()
 
 	var updateBtn *widget.Button
 	var checkBtn *widget.Button
@@ -290,6 +280,18 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 		statusBind.Set("Checking for updates...")
 
 		go func() {
+			// Check and close GoldenDict before checking for updates
+			gm := system.NewGoldenDictManager()
+			if running, _ := gm.IsRunning(); running {
+				statusBind.Set("Closing GoldenDict...")
+				gm.Close(5 * time.Second)
+
+				// Verify it closed
+				if running, _ = gm.IsRunning(); !running {
+					u.showAutoCloseNotification()
+				}
+			}
+
 			performDuplicateCheck()
 
 			client := github.NewGitHubClient()
@@ -353,6 +355,11 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 			if running, _ := gm.IsRunning(); running {
 				statusBind.Set("Closing GoldenDict...")
 				gm.Close(10 * time.Second)
+
+				// Verify it closed and show notification
+				if running, _ = gm.IsRunning(); !running {
+					u.showAutoCloseNotification()
+				}
 			}
 
 			inst := installer.NewInstaller(u.State.Config, func(msg string, p int) {

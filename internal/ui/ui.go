@@ -1,8 +1,11 @@
 package ui
 
 import (
+	"time"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"github.com/digitalpalidictionary/dpd-updater-go/internal/config"
 	"github.com/digitalpalidictionary/dpd-updater-go/internal/system"
@@ -40,6 +43,10 @@ func NewUI(cfg *config.Config, cm *config.ConfigManager) *UI {
 }
 
 func (u *UI) Start() {
+	if !u.ensureGoldenDictClosed() {
+		return
+	}
+
 	if u.State.Config.GoldenDictPath != "" {
 		// Scan for version
 		if version, err := system.ScanForVersion(u.State.Config.GoldenDictPath); err == nil {
@@ -78,4 +85,73 @@ func (u *UI) ShowMain() {
 
 func (u *UI) RunOnMain(f func()) {
 	u.Dispatch <- f
+}
+
+func (u *UI) ensureGoldenDictClosed() bool {
+	gm := system.NewGoldenDictManager()
+
+	running, _ := gm.IsRunning()
+	if !running {
+		return true
+	}
+
+	gm.Close(5 * time.Second)
+
+	running, _ = gm.IsRunning()
+	if !running {
+		u.showAutoCloseNotification()
+		return true
+	}
+
+	return u.showGoldenDictBlockingDialog(gm)
+}
+
+func (u *UI) showAutoCloseNotification() {
+	done := make(chan struct{})
+	u.Window.Show()
+	u.RunOnMain(func() {
+		d := dialog.NewInformation(
+			"GoldenDict Closed",
+			"GoldenDict was automatically closed to prevent file locks.",
+			u.Window,
+		)
+		d.Show()
+		go func() {
+			time.Sleep(3 * time.Second)
+			d.Hide()
+			close(done)
+		}()
+	})
+	<-done
+}
+
+func (u *UI) showGoldenDictBlockingDialog(gm *system.GoldenDictManager) bool {
+	done := make(chan bool, 1)
+
+	var showDialog func()
+	showDialog = func() {
+		dialog.ShowConfirm(
+			"GoldenDict is Running",
+			"GoldenDict is currently running and locks dictionary files.\n\n"+
+				"Automatic close failed. Please close GoldenDict manually, then click \"I've closed it\".",
+			func(confirmed bool) {
+				if confirmed {
+					running, _ := gm.IsRunning()
+					if !running {
+						done <- true
+					} else {
+						u.RunOnMain(showDialog)
+					}
+				} else {
+					done <- false
+				}
+			},
+			u.Window,
+		)
+	}
+
+	u.Window.Show()
+	u.RunOnMain(showDialog)
+
+	return <-done
 }
