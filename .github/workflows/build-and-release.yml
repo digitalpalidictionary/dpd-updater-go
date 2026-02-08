@@ -193,6 +193,30 @@ jobs:
             ## Changes
 
             ${{ steps.changelog.outputs.changelog }}
+
+            ## Installation
+
+            ### Windows
+            Download `dpd-updater-windows-${{ needs.calculate-version.outputs.version }}.exe` and double-click to run.
+
+            ### macOS
+            Download `dpd-updater-macos-${{ needs.calculate-version.outputs.version }}.zip`, extract it, and double-click the app to run.
+
+            ### Linux
+
+            **Option 1: Portable Binary (Easiest)**
+            ```bash
+            chmod +x dpd-updater-linux-${{ needs.calculate-version.outputs.version }}
+            ./dpd-updater-linux-${{ needs.calculate-version.outputs.version }}
+            ```
+
+            **Option 2: Tarball (System Installation)**
+            ```bash
+            tar -xJf dpd-updater-linux-${{ needs.calculate-version.outputs.version }}.tar.xz
+            cd dpd-updater-linux-${{ needs.calculate-version.outputs.version }}
+            sudo make install
+            ```
+            This installs the app to your system with desktop integration.
           files: |
             artifacts/dpd-updater-windows/*
             artifacts/dpd-updater-linux/*
