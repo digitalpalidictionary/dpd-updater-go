@@ -91,7 +91,26 @@ func CompareVersions(current, latest string) int {
 	c := strings.TrimPrefix(current, "v")
 	l := strings.TrimPrefix(latest, "v")
 
-	// Simple string comparison for now, can be improved with a semver library if needed
+	// Try to parse as dates first
+	currentDate, err1 := parseDate(c)
+	latestDate, err2 := parseDate(l)
+
+	if err1 == nil && err2 == nil {
+		// Both are valid dates, compare only the date part (Year, Month, Day)
+		// This handles cases where one string has a time component and the other doesn't
+		y1, m1, d1 := currentDate.Date()
+		y2, m2, d2 := latestDate.Date()
+
+		if y1 < y2 || (y1 == y2 && m1 < m2) || (y1 == y2 && m1 == m2 && d1 < d2) {
+			return -1
+		}
+		if y1 > y2 || (y1 == y2 && m1 > m2) || (y1 == y2 && m1 == m2 && d1 > d2) {
+			return 1
+		}
+		return 0
+	}
+
+	// Fallback to string comparison if dates can't be parsed
 	if c < l {
 		return -1
 	}
@@ -99,4 +118,24 @@ func CompareVersions(current, latest string) int {
 		return 1
 	}
 	return 0
+}
+
+// parseDate tries multiple date formats and returns the parsed time
+func parseDate(s string) (time.Time, error) {
+	// Common date formats to try
+	formats := []string{
+		"2006-01-02T15:04:05",
+		"2006-01-02",
+		"2006.01.02",
+		"2006/01/02",
+		"20060102",
+	}
+
+	for _, format := range formats {
+		if t, err := time.Parse(format, s); err == nil {
+			return t, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("unable to parse date: %s", s)
 }

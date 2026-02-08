@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"time"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
@@ -33,6 +35,16 @@ func (s *SetupWizard) Render() fyne.CanvasObject {
 	var continueBtn *widget.Button
 
 	selectBtn := widget.NewButton("Select Folder", func() {
+		// Ensure GoldenDict is closed before opening file dialog to avoid file locks
+		gm := system.NewGoldenDictManager()
+		if running, _ := gm.IsRunning(); running {
+			statusLabel.SetText("Closing GoldenDict...")
+			gm.Close(5 * time.Second)
+			if running, _ = gm.IsRunning(); !running {
+				statusLabel.SetText("✓ GoldenDict closed. Please select your folder.")
+			}
+		}
+
 		dialog.ShowFolderOpen(func(list fyne.ListableURI, err error) {
 			if err != nil || list == nil {
 				return

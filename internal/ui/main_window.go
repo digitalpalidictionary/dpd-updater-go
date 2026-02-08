@@ -464,6 +464,12 @@ func (m *MainWindow) showSettings() {
 	pathLabel.Wrapping = fyne.TextWrapBreak
 
 	changePathBtn := widget.NewButton("Change Folder", func() {
+		// Ensure GoldenDict is closed before opening file dialog to avoid file locks
+		gm := system.NewGoldenDictManager()
+		if running, _ := gm.IsRunning(); running {
+			gm.Close(5 * time.Second)
+		}
+
 		dialog.ShowFolderOpen(func(list fyne.ListableURI, err error) {
 			if err != nil || list == nil {
 				return

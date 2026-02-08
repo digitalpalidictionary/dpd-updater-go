@@ -1,7 +1,6 @@
 package system
 
 import (
-	"bufio"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -57,18 +56,9 @@ func ScanForVersion(gdPath string) (string, error) {
 	for _, f := range files {
 		if strings.HasSuffix(f.Name(), ".ifo") {
 			ifoPath := filepath.Join(dpdFolder, f.Name())
-			file, err := os.Open(ifoPath)
-			if err != nil {
-				continue
-			}
-			defer file.Close()
-
-			scanner := bufio.NewScanner(file)
-			for scanner.Scan() {
-				line := scanner.Text()
-				if strings.HasPrefix(line, "date=") {
-					return strings.TrimPrefix(line, "date="), nil
-				}
+			info, err := ParseIFO(ifoPath)
+			if err == nil {
+				return info.Date.Format("2006-01-02"), nil
 			}
 		}
 	}
