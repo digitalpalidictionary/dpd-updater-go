@@ -104,20 +104,17 @@ jobs:
         run: |
           $version = "${{ needs.calculate-version.outputs.version }}"
           
-          # Download pre-built rsrc binary (faster than go install)
-          curl -L -o rsrc.exe https://github.com/akavel/rsrc/releases/download/v0.10.2/rsrc.exe
+          # Install rsrc tool via Go (more reliable than downloading binary)
+          go install github.com/akavel/rsrc@v0.10.2
           
-          # Embed manifest and icon
-          .\rsrc.exe -manifest windows\manifest.xml -ico assets\icon.ico -o rsrc.syso
+          # Embed manifest and icon into rsrc.syso
+          rsrc -manifest windows\manifest.xml -ico assets\icon.ico -o rsrc.syso
           
-          # Build the binary
-          go build -ldflags="-s -w" -o dpd-updater.exe ./cmd/dpd-updater
+          # Build the binary with version info embedded
+          go build -ldflags="-s -w -H windowsgui" -o dpd-updater.exe ./cmd/dpd-updater
           
-          # Replace version placeholder in Inno Setup script
-          (Get-Content installer\dpd-updater.iss) -replace '{VERSION_PLACEHOLDER}', $version | Set-Content installer\dpd-updater.iss
-          
-          # Build installer with Inno Setup
-          iscc installer\dpd-updater.iss
+          # Build installer with Inno Setup, passing version via command line
+          iscc /DMyAppVersion=$version installer\dpd-updater.iss
           
           # Create distribution folder
           mkdir dist

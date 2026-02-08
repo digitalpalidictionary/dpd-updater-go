@@ -1,8 +1,12 @@
 ; DPD Updater Installer Script
 ; Inno Setup Script for DPD Updater
+;
+; Usage: iscc /DMyAppVersion=x.x.x installer\dpd-updater.iss
 
 #define MyAppName "DPD Updater"
-#define MyAppVersion "{VERSION_PLACEHOLDER}"
+#ifndef MyAppVersion
+  #define MyAppVersion "0.0.0"
+#endif
 #define MyAppPublisher "Digital Pali Dictionary"
 #define MyAppURL "https://github.com/digitalpalidictionary/dpd-updater-go"
 #define MyAppExeName "dpd-updater.exe"
