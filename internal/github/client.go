@@ -88,29 +88,55 @@ func CompareVersions(current, latest string) int {
 		return -1
 	}
 
-	c := strings.TrimPrefix(current, "v")
-	l := strings.TrimPrefix(latest, "v")
-
-	// Try to parse as dates first
-	currentDate, err1 := parseDate(c)
-	latestDate, err2 := parseDate(l)
+	// Try to parse both as dates first
+	currentDate, err1 := parseDate(current)
+	latestDate, err2 := parseDate(latest)
 
 	if err1 == nil && err2 == nil {
-		// Both are valid dates, compare only the date part (Year, Month, Day)
-		// This handles cases where one string has a time component and the other doesn't
-		y1, m1, d1 := currentDate.Date()
-		y2, m2, d2 := latestDate.Date()
+		// Both are dates, compare date-only (ignore time component)
+		currentY, currentM, currentD := currentDate.Date()
+		latestY, latestM, latestD := latestDate.Date()
 
-		if y1 < y2 || (y1 == y2 && m1 < m2) || (y1 == y2 && m1 == m2 && d1 < d2) {
+		if currentY < latestY || (currentY == latestY && currentM < latestM) || (currentY == latestY && currentM == latestM && currentD < latestD) {
 			return -1
 		}
-		if y1 > y2 || (y1 == y2 && m1 > m2) || (y1 == y2 && m1 == m2 && d1 > d2) {
+		if currentY > latestY || (currentY == latestY && currentM > latestM) || (currentY == latestY && currentM == latestM && currentD > latestD) {
 			return 1
 		}
 		return 0
 	}
 
-	// Fallback to string comparison if dates can't be parsed
+	// If current is a date but latest is not, try semver format
+	if err1 == nil && err2 != nil {
+		// Parse GitHub version (semver with date as patch): "v0.3.20260202"
+		latest = strings.TrimPrefix(latest, "v")
+		parts := strings.Split(latest, ".")
+		if len(parts) >= 3 {
+			// Patch is the 3rd part and is YYYYMMDD format
+			patch := parts[2]
+			if len(patch) >= 8 {
+				// Extract first 8 digits as YYYYMMDD
+				dateStr := patch[:8]
+				if latestDate, err := time.Parse("20060102", dateStr); err == nil {
+					// Compare dates (date only, ignore time)
+					currentY, currentM, currentD := currentDate.Date()
+					latestY, latestM, latestD := latestDate.Date()
+
+					if currentY < latestY || (currentY == latestY && currentM < latestM) || (currentY == latestY && currentM == latestM && currentD < latestD) {
+						return -1
+					}
+					if currentY > latestY || (currentY == latestY && currentM > latestM) || (currentY == latestY && currentM == latestM && currentD > latestD) {
+						return 1
+					}
+					return 0
+				}
+			}
+		}
+	}
+
+	// Fallback to string comparison
+	c := strings.TrimPrefix(current, "v")
+	l := strings.TrimPrefix(latest, "v")
 	if c < l {
 		return -1
 	}
@@ -131,11 +157,36 @@ func parseDate(s string) (time.Time, error) {
 		"20060102",
 	}
 
+	// Try parsing the full string first
 	for _, format := range formats {
 		if t, err := time.Parse(format, s); err == nil {
 			return t, nil
 		}
 	}
 
+	// Try to extract date from the end of version strings like "0.3.20260202"
+	// Look for 8 consecutive digits at the end (YYYYMMDD format)
+	for i := len(s) - 8; i >= 0; i-- {
+		if i+8 <= len(s) {
+			candidate := s[i : i+8]
+			// Check if it's all digits
+			if isAllDigits(candidate) {
+				if t, err := time.Parse("20060102", candidate); err == nil {
+					return t, nil
+				}
+			}
+		}
+	}
+
 	return time.Time{}, fmt.Errorf("unable to parse date: %s", s)
+}
+
+// isAllDigits checks if a string contains only digits
+func isAllDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return len(s) > 0
 }
