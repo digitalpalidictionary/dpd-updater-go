@@ -137,6 +137,22 @@ jobs:
         with:
           path: artifacts
 
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          # Get the previous tag (the one before the new tag we're about to create)
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD 2>/dev/null || echo "- Initial release")
+          else
+            CHANGELOG="- Initial release"
+          fi
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Tag Release
         run: |
           git config user.name "github-actions[bot]"
@@ -149,8 +165,15 @@ jobs:
         with:
           tag_name: ${{ needs.calculate-version.outputs.tag }}
           name: DPD Updater v${{ needs.calculate-version.outputs.version }}
-          draft: true
+          draft: false
           prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Changes
+
+            ${{ steps.changelog.outputs.changelog }}
+
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.changelog.outputs.prev_tag || 'v0.0.0' }}...${{ needs.calculate-version.outputs.tag }}
           files: |
             artifacts/dpd-updater-windows/*.exe
             artifacts/dpd-updater-linux/*
