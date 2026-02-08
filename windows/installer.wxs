@@ -19,6 +19,9 @@
     
     <MediaTemplate EmbedCab="yes" />
     
+    <!-- Define Icon -->
+    <Icon Id="icon.ico" SourceFile="icon.ico" />
+    
     <!-- User Interface -->
     <UIRef Id="WixUI_InstallDir" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
@@ -56,12 +59,10 @@
         <File Id="DPDUpdaterEXE" 
               Name="dpd-updater.exe" 
               Source="dpd-updater.exe" 
-              KeyPath="yes"
-              Icon="icon.ico">
+              KeyPath="yes">
           <Shortcut Id="startmenuDPDUpdater" 
                     Directory="ApplicationProgramsFolder" 
                     Name="DPD Updater"
-                    Icon="icon.ico"
                     Advertise="yes" />
         </File>
         <RegistryValue Root="HKCU" 
