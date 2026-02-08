@@ -27,7 +27,7 @@ Download the latest pre-compiled binaries from the [GitHub Releases](https://git
 ### Running from Source
 
 ```bash
-go run ./cmd/dpd-updater
+go run .
 ```
 
 ### Building
@@ -41,9 +41,9 @@ The Fyne CLI handles icons, manifests, and app bundles automatically:
 go install fyne.io/fyne/v2/cmd/fyne@latest
 
 # Build for current platform
-fyne package -os windows -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater -src ./cmd/dpd-updater
-fyne package -os darwin  -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater -src ./cmd/dpd-updater
-fyne package -os linux   -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater -src ./cmd/dpd-updater
+fyne package -os windows -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater
+fyne package -os darwin  -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater
+fyne package -os linux   -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater
 ```
 
 #### Option 2: Using GitHub Actions
@@ -58,7 +58,7 @@ This is the recommended approach for releases since Fyne requires platform-speci
 
 ```
 dpd-updater-go/
-├── cmd/dpd-updater/     # Main application entry point
+├── main.go              # Application entry point
 ├── internal/            # Internal packages
 │   ├── config/          # Configuration handling
 │   ├── github/          # GitHub API client

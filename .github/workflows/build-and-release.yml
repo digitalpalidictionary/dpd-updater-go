@@ -88,8 +88,7 @@ jobs:
           fyne package -os ${{ matrix.fyne_os }} \
             -icon assets/icon.png \
             -appID net.dpdict.dpd-updater \
-            -name dpd-updater \
-            -src ./cmd/dpd-updater
+            -name dpd-updater
           
           mkdir dist
           
