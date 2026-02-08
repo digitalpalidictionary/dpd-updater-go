@@ -117,26 +117,18 @@ jobs:
               exit 1
             fi
           else
-            # Linux: fyne package creates a .tar.xz file
+            # Linux: Provide both tarball (system install) and portable binary
+            
+            # Option 1: Fyne tarball for system installation (with desktop integration)
             if [ -f "dpd-updater.tar.xz" ]; then
-              echo "=== Extracting Linux tarball ==="
-              tar -tJf dpd-updater.tar.xz  # List contents first
-              tar -xJf dpd-updater.tar.xz
-              echo "=== Looking for binary ==="
-              find . -name "dpd-updater" -type f 2>/dev/null | head -5
-              # Find and move the binary
-              BINARY_PATH=$(find . -name "dpd-updater" -type f -executable 2>/dev/null | head -1)
-              if [ -n "$BINARY_PATH" ]; then
-                mv "$BINARY_PATH" "dist/dpd-updater-linux-$VERSION"
-                chmod +x "dist/dpd-updater-linux-$VERSION"
-              else
-                echo "ERROR: Could not find dpd-updater binary in extracted files!"
-                exit 1
-              fi
-            else
-              echo "ERROR: dpd-updater.tar.xz not found!"
-              exit 1
+              cp dpd-updater.tar.xz "dist/dpd-updater-linux-$VERSION.tar.xz"
+              echo "✓ Created tarball: dpd-updater-linux-$VERSION.tar.xz"
             fi
+            
+            # Option 2: Build portable binary
+            go build -ldflags="-s -w" -o "dist/dpd-updater-linux-$VERSION" .
+            chmod +x "dist/dpd-updater-linux-$VERSION"
+            echo "✓ Created portable binary: dpd-updater-linux-$VERSION"
           fi
           
           echo "=== Final dist contents ==="
@@ -201,17 +193,6 @@ jobs:
             ## Changes
 
             ${{ steps.changelog.outputs.changelog }}
-
-            ## Installation
-
-            ### Windows
-            Download `dpd-updater-windows-VERSION.exe` and run directly.
-
-            ### macOS
-            Download `dpd-updater-macos-VERSION.zip`, extract, and run.
-
-            ### Linux
-            Download `dpd-updater-linux-VERSION`, make it executable (`chmod +x`), and run.
           files: |
             artifacts/dpd-updater-windows/*
             artifacts/dpd-updater-linux/*
