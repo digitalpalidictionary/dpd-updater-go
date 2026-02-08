@@ -103,6 +103,8 @@ jobs:
       - name: Build Windows Executable and MSI
         if: matrix.platform == 'windows'
         run: |
+          $VERSION = "${{ needs.calculate-version.outputs.version }}"
+          
           go install github.com/akavel/rsrc@latest
           
           # Use pre-built ICO file
@@ -111,12 +113,14 @@ jobs:
           # Embed manifest and icon
           rsrc -manifest windows\manifest.xml -ico windows\icon.ico -o rsrc.syso
           
-          $VERSION = "${{ needs.calculate-version.outputs.version }}"
+          # Build the binary
           go build -ldflags="-s -w" -o dpd-updater.exe ./cmd/dpd-updater
           
+          # Build MSI with WiX
           candle -arch x64 -dVersion=$VERSION windows\installer.wxs -o installer.wixobj
           light -ext WixUIExtension -out dpd-updater.msi installer.wixobj
           
+          # Create distribution folder
           mkdir dist
           copy dpd-updater.exe "dist\dpd-updater-windows-$VERSION.exe"
           copy dpd-updater.msi "dist\dpd-updater-windows-$VERSION.msi"
