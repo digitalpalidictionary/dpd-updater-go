@@ -38,7 +38,7 @@ The Fyne CLI handles icons, manifests, and app bundles automatically:
 
 ```bash
 # Install Fyne CLI
-go install fyne.io/fyne/v2/cmd/fyne@latest
+go install fyne.io/tools/cmd/fyne@latest
 
 # Build for current platform
 fyne package -os windows -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater
