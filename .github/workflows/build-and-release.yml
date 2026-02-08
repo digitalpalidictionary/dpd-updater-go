@@ -90,8 +90,7 @@ jobs:
       - name: Install dependencies (Windows)
         if: matrix.platform == 'windows'
         run: |
-          choco install wixtoolset --version=3.14.1 -y
-          echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" >> $env:GITHUB_PATH
+          choco install innosetup -y --no-progress
           go mod download
         shell: pwsh
 
@@ -100,30 +99,29 @@ jobs:
         run: go mod download
         shell: bash
 
-      - name: Build Windows Executable and MSI
+      - name: Build Windows Executable and Installer
         if: matrix.platform == 'windows'
         run: |
           $version = "${{ needs.calculate-version.outputs.version }}"
           
           go install github.com/akavel/rsrc@latest
           
-          # Use pre-built ICO file
-          copy assets\icon.ico windows\icon.ico
-          
           # Embed manifest and icon
-          rsrc -manifest windows\manifest.xml -ico windows\icon.ico -o rsrc.syso
+          rsrc -manifest windows\manifest.xml -ico assets\icon.ico -o rsrc.syso
           
           # Build the binary
           go build -ldflags="-s -w" -o dpd-updater.exe ./cmd/dpd-updater
           
-          # Build MSI with WiX
-          candle -arch x64 -dVersion="$version" windows\installer.wxs -o installer.wixobj
-          light -ext WixUIExtension -out dpd-updater.msi installer.wixobj
+          # Replace version placeholder in Inno Setup script
+          (Get-Content installer\dpd-updater.iss) -replace '{VERSION_PLACEHOLDER}', $version | Set-Content installer\dpd-updater.iss
+          
+          # Build installer with Inno Setup
+          iscc installer\dpd-updater.iss
           
           # Create distribution folder
           mkdir dist
           copy dpd-updater.exe "dist\dpd-updater-windows-$version.exe"
-          copy dpd-updater.msi "dist\dpd-updater-windows-$version.msi"
+          copy installer\Output\dpd-updater-windows-$version.exe "dist\dpd-updater-windows-$version-setup.exe"
         shell: pwsh
 
       - name: Build macOS .app Bundle
@@ -301,8 +299,8 @@ jobs:
             ## Installation
 
             ### Windows
-            **Option 1 - Installer (Recommended):** Download and run `dpd-updater-windows-VERSION.msi`
-            - No administrator rights required for default "Just me" installation
+            **Option 1 - Installer (Recommended):** Download and run `dpd-updater-windows-VERSION-setup.exe`
+            - Choose between per-user or per-machine installation
             - Creates Start Menu shortcut
             - Can be uninstalled from Add/Remove Programs
 
