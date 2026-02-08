@@ -23,7 +23,6 @@ jobs:
       - name: Get Version Info
         id: version_info
         run: |
-          # Get latest tag or "v0.0.0" if it doesn't exist
           TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           echo "tag=$TAG" >> $GITHUB_OUTPUT
         shell: bash
@@ -32,18 +31,12 @@ jobs:
         id: next_version
         run: |
           TAG="${{ steps.version_info.outputs.tag }}"
-          
-          # Strip 'v' prefix
           TAG_V=${TAG#v}
-          
-          # Extract major.minor.patch
           MAJOR=$(echo $TAG_V | cut -d. -f1)
           MINOR=$(echo $TAG_V | cut -d. -f2)
           PATCH=$(echo $TAG_V | cut -d. -f3)
-          
           NEW_PATCH=$((PATCH + 1))
           NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
-
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "tag=v${NEW_VERSION}" >> $GITHUB_OUTPUT
         shell: bash
@@ -58,19 +51,17 @@ jobs:
         include:
           - platform: windows
             os: windows-latest
-            artifact_name: dpd-updater-windows
+            fyne_os: windows
           - platform: macos
             os: macos-latest
-            artifact_name: dpd-updater-mac
+            fyne_os: darwin
           - platform: linux
             os: ubuntu-latest
-            artifact_name: dpd-updater-linux
+            fyne_os: linux
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -79,165 +70,43 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - name: Install dependencies (Linux)
+      - name: Install Linux dependencies
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgl1-mesa-dev xorg-dev
-          go mod download
         shell: bash
 
-      - name: Install dependencies (Windows)
-        if: matrix.platform == 'windows'
-        run: |
-          choco install innosetup -y --no-progress
-          go mod download
-        shell: pwsh
-
-      - name: Install dependencies (macOS)
-        if: matrix.platform == 'macos'
-        run: go mod download
+      - name: Install Fyne CLI
+        run: go install fyne.io/fyne/v2/cmd/fyne@latest
         shell: bash
 
-      - name: Build Windows Executable and Installer
-        if: matrix.platform == 'windows'
+      - name: Package for ${{ matrix.platform }}
         run: |
-          $version = "${{ needs.calculate-version.outputs.version }}"
+          VERSION="${{ needs.calculate-version.outputs.version }}"
           
-          # Install rsrc tool via Go (more reliable than downloading binary)
-          go install github.com/akavel/rsrc@v0.10.2
+          fyne package -os ${{ matrix.fyne_os }} \
+            -icon assets/icon.png \
+            -appID net.dpdict.dpd-updater \
+            -name dpd-updater \
+            -src ./cmd/dpd-updater
           
-          # Embed manifest and icon into rsrc.syso
-          rsrc -manifest windows\manifest.xml -ico assets\icon.ico -o rsrc.syso
-          
-          # Build the binary with version info embedded
-          go build -ldflags="-s -w -H windowsgui" -o dpd-updater.exe ./cmd/dpd-updater
-          
-          # Build installer with Inno Setup, passing version via command line
-          iscc /DMyAppVersion=$version installer\dpd-updater.iss
-          
-          # Create distribution folder
           mkdir dist
-          copy dpd-updater.exe "dist\dpd-updater-windows-$version.exe"
-          copy installer\Output\dpd-updater-windows-$version.exe "dist\dpd-updater-windows-$version-setup.exe"
-        shell: pwsh
-
-      - name: Build macOS .app Bundle
-        if: matrix.platform == 'macos'
-        run: |
-          VERSION="${{ needs.calculate-version.outputs.version }}"
-          APP_NAME="DPD Updater"
-          BUNDLE_ID="net.dpdict.dpd-updater"
           
-          # Build the binary
-          go build -ldflags="-s -w" -o dpd-updater ./cmd/dpd-updater
-          
-          # Create .app bundle structure manually
-          mkdir -p "${APP_NAME}.app/Contents/MacOS"
-          mkdir -p "${APP_NAME}.app/Contents/Resources"
-          
-          # Copy binary
-          cp dpd-updater "${APP_NAME}.app/Contents/MacOS/"
-          
-          # Convert PNG to icns for macOS
-          mkdir -p icon.iconset
-          sips -z 16 16 assets/icon.png --out icon.iconset/icon_16x16.png
-          sips -z 32 32 assets/icon.png --out icon.iconset/icon_16x16@2x.png
-          sips -z 32 32 assets/icon.png --out icon.iconset/icon_32x32.png
-          sips -z 64 64 assets/icon.png --out icon.iconset/icon_32x32@2x.png
-          sips -z 128 128 assets/icon.png --out icon.iconset/icon_128x128.png
-          sips -z 256 256 assets/icon.png --out icon.iconset/icon_128x128@2x.png
-          sips -z 256 256 assets/icon.png --out icon.iconset/icon_256x256.png
-          sips -z 512 512 assets/icon.png --out icon.iconset/icon_256x256@2x.png
-          sips -z 512 512 assets/icon.png --out icon.iconset/icon_512x512.png
-          sips -z 1024 1024 assets/icon.png --out icon.iconset/icon_512x512@2x.png
-          iconutil -c icns icon.iconset -o "${APP_NAME}.app/Contents/Resources/icon.icns"
-          rm -rf icon.iconset
-          
-          # Create Info.plist
-          cat > "${APP_NAME}.app/Contents/Info.plist" << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleDevelopmentRegion</key>
-              <string>en</string>
-              <key>CFBundleExecutable</key>
-              <string>dpd-updater</string>
-              <key>CFBundleIconFile</key>
-              <string>icon.icns</string>
-              <key>CFBundleIdentifier</key>
-              <string>${BUNDLE_ID}</string>
-              <key>CFBundleInfoDictionaryVersion</key>
-              <string>6.0</string>
-              <key>CFBundleName</key>
-              <string>${APP_NAME}</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>${VERSION}</string>
-              <key>CFBundleVersion</key>
-              <string>${VERSION}</string>
-              <key>LSMinimumSystemVersion</key>
-              <string>10.11</string>
-              <key>NSHighResolutionCapable</key>
-              <true/>
-          </dict>
-          </plist>
-          EOF
-          
-          # Create distribution
-          mkdir -p dist
-          hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_NAME}.app" -ov -format UDZO "dist/dpd-updater-macos-${VERSION}.dmg"
-          zip -r "dist/dpd-updater-macos-${VERSION}.zip" "${APP_NAME}.app"
-        shell: bash
-
-      - name: Build Linux Packages
-        if: matrix.platform == 'linux'
-        run: |
-          VERSION="${{ needs.calculate-version.outputs.version }}"
-          mkdir -p dist
-          go build -ldflags="-s -w" -o dpd-updater ./cmd/dpd-updater
-          
-          # .deb package
-          mkdir -p dpd-updater_${VERSION}_amd64/DEBIAN
-          mkdir -p dpd-updater_${VERSION}_amd64/usr/bin
-          mkdir -p dpd-updater_${VERSION}_amd64/usr/share/applications
-          mkdir -p dpd-updater_${VERSION}_amd64/usr/share/icons/hicolor/256x256/apps
-          
-          cp dpd-updater dpd-updater_${VERSION}_amd64/usr/bin/
-          cp assets/icon.png dpd-updater_${VERSION}_amd64/usr/share/icons/hicolor/256x256/apps/dpd-updater.png
-          
-          echo "Package: dpd-updater" > dpd-updater_${VERSION}_amd64/DEBIAN/control
-          echo "Version: $VERSION" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
-          echo "Section: utils" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
-          echo "Priority: optional" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
-          echo "Architecture: amd64" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
-          echo "Depends: libgl1-mesa-glx, libx11-6" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
-          echo "Maintainer: Digital Pali Dictionary" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
-          echo "Description: DPD Updater for GoldenDict" >> dpd-updater_${VERSION}_amd64/DEBIAN/control
-          
-          echo '[Desktop Entry]' > dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
-          echo 'Name=DPD Updater' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
-          echo 'Comment=Standalone DPD Updater for GoldenDict' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
-          echo 'Exec=/usr/bin/dpd-updater' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
-          echo 'Icon=/usr/share/icons/hicolor/256x256/apps/dpd-updater.png' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
-          echo 'Type=Application' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
-          echo 'Categories=Office;Dictionary;' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
-          echo 'Terminal=false' >> dpd-updater_${VERSION}_amd64/usr/share/applications/dpd-updater.desktop
-          
-          dpkg-deb --build dpd-updater_${VERSION}_amd64
-          mv dpd-updater_${VERSION}_amd64.deb dist/
-          
-          # Copy plain binary
-          cp dpd-updater "dist/dpd-updater-linux-$VERSION"
-          chmod +x "dist/dpd-updater-linux-$VERSION"
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            mv dpd-updater.exe "dist/dpd-updater-windows-$VERSION.exe"
+          elif [ "${{ matrix.platform }}" = "macos" ]; then
+            zip -r "dist/dpd-updater-macos-$VERSION.zip" dpd-updater.app
+          else
+            mv dpd-updater "dist/dpd-updater-linux-$VERSION"
+            chmod +x "dist/dpd-updater-linux-$VERSION"
+          fi
         shell: bash
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: dpd-updater-${{ matrix.platform }}
           path: dist/*
 
   release:
@@ -271,7 +140,6 @@ jobs:
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Tag Release
@@ -297,21 +165,14 @@ jobs:
             ## Installation
 
             ### Windows
-            **Option 1 - Installer (Recommended):** Download and run `dpd-updater-windows-VERSION-setup.exe`
-            - Choose between per-user or per-machine installation
-            - Creates Start Menu shortcut
-            - Can be uninstalled from Add/Remove Programs
-
-            **Option 2 - Portable:** Download `dpd-updater-windows-VERSION.exe` and run directly
+            Download `dpd-updater-windows-VERSION.exe` and run directly.
 
             ### macOS
-            Download `dpd-updater-macos-VERSION.dmg`, open it, and drag "DPD Updater" to Applications
+            Download `dpd-updater-macos-VERSION.zip`, extract, and run.
 
             ### Linux
-            **Option 1 - .deb (Debian/Ubuntu, Recommended):** Download and install with `sudo dpkg -i dpd-updater_VERSION_amd64.deb`
-            
-            **Option 2 - Portable:** Download `dpd-updater-linux-VERSION`, make it executable (`chmod +x`), and run
+            Download `dpd-updater-linux-VERSION`, make it executable (`chmod +x`), and run.
           files: |
             artifacts/dpd-updater-windows/*
             artifacts/dpd-updater-linux/*
-            artifacts/dpd-updater-mac/*
+            artifacts/dpd-updater-macos/*

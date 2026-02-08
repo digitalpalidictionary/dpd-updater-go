@@ -11,37 +11,64 @@ Standalone DPD Updater written in Go using the Fyne GUI toolkit. This applicatio
 - **Duplicate Detection:** Automatically identifies and helps clean up multiple DPD copies in your GoldenDict folder to ensure the best performance.
 
 ## Installation
-You can download the latest pre-compiled binaries from the GitHub Releases page.
+
+Download the latest pre-compiled binaries from the [GitHub Releases](https://github.com/digitalpalidictionary/dpd-updater-go/releases) page.
 
 ## Development
-To build and run from source:
+
+### Prerequisites
 
 1. Install Go 1.22+
-2. Install Fyne dependencies (on Linux: `sudo apt-get install libgl1-mesa-dev xorg-dev`)
-3. Run the application:
-   ```bash
-   go run ./cmd/dpd-updater
-   ```
+2. Install Fyne dependencies:
+   - **Linux**: `sudo apt-get install libgl1-mesa-dev xorg-dev`
+   - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+   - **Windows**: No additional dependencies
 
-To build an optimized production binary:
+### Running from Source
+
 ```bash
-go build -ldflags="-s -w" -o dpd-updater ./cmd/dpd-updater
+go run ./cmd/dpd-updater
 ```
 
-### Building for Multiple Platforms
+### Building
 
-Fyne uses platform-specific graphics libraries (OpenGL), so **cross-compilation is not supported**. 
+#### Option 1: Using `fyne package` (Recommended)
 
-To build for Windows, use one of these methods:
+The Fyne CLI handles icons, manifests, and app bundles automatically:
 
-**Option 1: Use GitHub Actions (Recommended)**
-The project includes a workflow that builds for all platforms automatically. Go to Actions → "Build & Release" and run the workflow.
-
-**Option 2: Build on Windows directly**
-On a Windows machine with Go installed:
 ```bash
-go build -ldflags="-s -w" -o dpd-updater.exe ./cmd/dpd-updater
+# Install Fyne CLI
+go install fyne.io/fyne/v2/cmd/fyne@latest
+
+# Build for current platform
+fyne package -os windows -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater -src ./cmd/dpd-updater
+fyne package -os darwin  -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater -src ./cmd/dpd-updater
+fyne package -os linux   -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater -src ./cmd/dpd-updater
+```
+
+#### Option 2: Using GitHub Actions
+
+The project includes a workflow that builds for all platforms automatically:
+1. Go to Actions → "Build & Release"
+2. Click "Run workflow"
+
+This is the recommended approach for releases since Fyne requires platform-specific builds.
+
+## Project Structure
+
+```
+dpd-updater-go/
+├── cmd/dpd-updater/     # Main application entry point
+├── internal/            # Internal packages
+│   ├── config/          # Configuration handling
+│   ├── github/          # GitHub API client
+│   ├── installer/       # Installation logic
+│   ├── system/          # System detection (GoldenDict, DPD info)
+│   └── ui/              # Fyne UI components
+├── assets/              # Icons and images
+└── .github/workflows/   # CI/CD workflows
 ```
 
 ## License
+
 MIT License
