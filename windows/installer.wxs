@@ -27,6 +27,9 @@
     <UIRef Id="WixUI_InstallDir" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
     
+    <!-- Force per-machine installation -->
+    <Property Id="ALLUSERS" Value="1" />
+    
     <!-- Default installation directory -->
     <Property Id="INSTALLFOLDER">
       <RegistrySearch Id="FindInstallLocation" 
@@ -43,8 +46,8 @@
         </Directory>
       </Directory>
       
-      <!-- Start Menu -->
-      <Directory Id="ProgramMenuFolder">
+      <!-- Start Menu (Common for all users) -->
+      <Directory Id="CommonProgramsFolder">
         <Directory Id="ApplicationProgramsFolder" Name="DPD Updater" />
       </Directory>
     </Directory>
