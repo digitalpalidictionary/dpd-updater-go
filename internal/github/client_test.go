@@ -22,7 +22,7 @@ func TestCompareVersions(t *testing.T) {
 		// Real-world case: IFO date vs GitHub semver with date as patch
 		{"2025-07-09", "v0.3.20260202", -1}, // Should detect update available
 		{"2026-02-02", "v0.3.20260202", 0},  // Same date
-		{"2026-02-03", "v0.3.20260202", 1},  // Installed is newer
+		{"2026-02-03", "v0.3.20260202", 1},  // Installed is newer (unreleased version)
 
 		// Semantic-like or string fallback
 		{"v1.0.0", "v1.0.1", -1},

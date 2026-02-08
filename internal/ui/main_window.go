@@ -317,6 +317,9 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 				if comp < 0 {
 					statusBind.Set("Update available!")
 					updateBtn.Enable()
+				} else if comp > 0 {
+					statusBind.Set("You have an unreleased version, no update necessary.")
+					updateBtn.Disable()
 				} else {
 					statusBind.Set("You are up to date.")
 					updateBtn.Disable()
