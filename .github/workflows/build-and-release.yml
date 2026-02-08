@@ -172,8 +172,6 @@ jobs:
             ## Changes
 
             ${{ steps.changelog.outputs.changelog }}
-
-            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.changelog.outputs.prev_tag || 'v0.0.0' }}...${{ needs.calculate-version.outputs.tag }}
           files: |
             artifacts/dpd-updater-windows/*.exe
             artifacts/dpd-updater-linux/*
