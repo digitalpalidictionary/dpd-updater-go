@@ -104,10 +104,11 @@ jobs:
         run: |
           $version = "${{ needs.calculate-version.outputs.version }}"
           
-          go install github.com/akavel/rsrc@latest
+          # Download pre-built rsrc binary (faster than go install)
+          curl -L -o rsrc.exe https://github.com/akavel/rsrc/releases/download/v0.10.2/rsrc.exe
           
           # Embed manifest and icon
-          rsrc -manifest windows\manifest.xml -ico assets\icon.ico -o rsrc.syso
+          .\rsrc.exe -manifest windows\manifest.xml -ico assets\icon.ico -o rsrc.syso
           
           # Build the binary
           go build -ldflags="-s -w" -o dpd-updater.exe ./cmd/dpd-updater
