@@ -41,9 +41,9 @@ The Fyne CLI handles icons, manifests, and app bundles automatically:
 go install fyne.io/tools/cmd/fyne@latest
 
 # Build for current platform
-fyne package -os windows -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater
-fyne package -os darwin  -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater
-fyne package -os linux   -icon assets/icon.png -appID net.dpdict.dpd-updater -name dpd-updater
+fyne package --os windows --icon assets/icon.png --app-id net.dpdict.dpd-updater --name dpd-updater
+fyne package --os darwin  --icon assets/icon.png --app-id net.dpdict.dpd-updater --name dpd-updater
+fyne package --os linux   --icon assets/icon.png --app-id net.dpdict.dpd-updater --name dpd-updater
 ```
 
 #### Option 2: Using GitHub Actions
