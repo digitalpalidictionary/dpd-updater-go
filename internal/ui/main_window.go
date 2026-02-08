@@ -395,7 +395,7 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 				return
 			}
 
-			_, err = inst.BackupExisting(ctx, u.State.Config.GoldenDictPath)
+			backupDir, err := inst.BackupExisting(ctx, u.State.Config.GoldenDictPath)
 			if err != nil {
 				if err == context.Canceled {
 					statusBind.Set("Update cancelled.")
@@ -411,12 +411,34 @@ func (m *MainWindow) Render() fyne.CanvasObject {
 					statusBind.Set("Update cancelled.")
 				} else {
 					statusBind.Set(fmt.Sprintf("Installation failed: %v", err))
+
+					// Auto-restore from backup on failure
+					if backupDir != "" {
+						m.runOnMain(func() {
+							statusBind.Set("Installation failed. Attempting to restore from backup...")
+						})
+						if restoreErr := inst.RestoreFromBackup(backupDir, u.State.Config.GoldenDictPath); restoreErr != nil {
+							m.runOnMain(func() {
+								statusBind.Set(fmt.Sprintf("Installation failed AND restore failed: %v. Backup kept at: %s", restoreErr, backupDir))
+							})
+						} else {
+							m.runOnMain(func() {
+								statusBind.Set("Installation failed. Previous version restored successfully.")
+							})
+							os.RemoveAll(backupDir) // Clean up after successful restore
+						}
+					}
 				}
 			} else {
 				u.State.Lock()
 				u.State.Config.InstalledVersion = u.State.LatestRelease.Version
 				u.ConfigManager.SaveConfig(u.State.Config)
 				u.State.Unlock()
+
+				// Delete backup on success
+				if backupDir != "" {
+					os.RemoveAll(backupDir)
+				}
 
 				m.runOnMain(performDuplicateCheck)
 				statusBind.Set("Update complete! Restarting GoldenDict...")

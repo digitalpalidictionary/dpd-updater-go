@@ -189,6 +189,55 @@ func (i *Installer) InstallUpdate(ctx context.Context, zipPath, gdPath string) e
 	return nil
 }
 
+func (i *Installer) RestoreFromBackup(backupDir, gdPath string) error {
+	if backupDir == "" {
+		return fmt.Errorf("no backup directory specified")
+	}
+
+	// Check if backup exists
+	info, err := os.Stat(backupDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("backup directory does not exist")
+		}
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("backup path is not a directory")
+	}
+
+	// Read backup contents
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		return fmt.Errorf("failed to read backup directory: %w", err)
+	}
+
+	if len(entries) == 0 {
+		return fmt.Errorf("backup directory is empty")
+	}
+
+	// Restore each item from backup
+	for _, entry := range entries {
+		src := filepath.Join(backupDir, entry.Name())
+		dst := filepath.Join(gdPath, entry.Name())
+
+		// Remove any existing broken installation
+		os.RemoveAll(dst)
+
+		if entry.IsDir() {
+			if err := copyDir(src, dst); err != nil {
+				return fmt.Errorf("failed to restore directory %s: %w", entry.Name(), err)
+			}
+		} else {
+			if err := copyFile(src, dst); err != nil {
+				return fmt.Errorf("failed to restore file %s: %w", entry.Name(), err)
+			}
+		}
+	}
+
+	return nil
+}
+
 func DeleteFolders(paths []string) error {
 	for _, p := range paths {
 		// We delete the parent directory of dpd.ifo because dpd.ifo is inside the dictionary folder
