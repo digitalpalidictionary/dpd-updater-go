@@ -117,11 +117,11 @@ jobs:
               exit 1
             fi
           else
-            # Linux: fyne package creates a .tar.gz file
-            if [ -f "dpd-updater.tar.gz" ]; then
+            # Linux: fyne package creates a .tar.xz file
+            if [ -f "dpd-updater.tar.xz" ]; then
               echo "=== Extracting Linux tarball ==="
-              tar -tzf dpd-updater.tar.gz  # List contents first
-              tar -xzf dpd-updater.tar.gz
+              tar -tJf dpd-updater.tar.xz  # List contents first
+              tar -xJf dpd-updater.tar.xz
               echo "=== Looking for binary ==="
               find . -name "dpd-updater" -type f 2>/dev/null | head -5
               # Find and move the binary
@@ -134,7 +134,7 @@ jobs:
                 exit 1
               fi
             else
-              echo "ERROR: dpd-updater.tar.gz not found!"
+              echo "ERROR: dpd-updater.tar.xz not found!"
               exit 1
             fi
           fi
