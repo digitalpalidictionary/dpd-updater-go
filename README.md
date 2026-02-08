@@ -18,7 +18,7 @@ Download the latest pre-compiled binaries from the [GitHub Releases](https://git
 
 ### Prerequisites
 
-1. Install Go 1.22+
+1. Install Go 1.24+
 2. Install Fyne dependencies:
    - **Linux**: `sudo apt-get install libgl1-mesa-dev xorg-dev`
    - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
@@ -41,9 +41,9 @@ The Fyne CLI handles icons, manifests, and app bundles automatically:
 go install fyne.io/tools/cmd/fyne@latest
 
 # Build for current platform
-fyne package --os windows --icon assets/icon.png --app-id net.dpdict.dpd-updater --name dpd-updater
-fyne package --os darwin  --icon assets/icon.png --app-id net.dpdict.dpd-updater --name dpd-updater
-fyne package --os linux   --icon assets/icon.png --app-id net.dpdict.dpd-updater --name dpd-updater
+fyne package --os windows --src . --icon assets/icon.png --app-id net.dpdict.dpd-updater --name dpd-updater
+fyne package --os darwin  --src . --icon assets/icon.png --app-id net.dpdict.dpd-updater --name dpd-updater
+fyne package --os linux   --src . --icon assets/icon.png --app-id net.dpdict.dpd-updater --name dpd-updater
 ```
 
 #### Option 2: Using GitHub Actions
