@@ -28,5 +28,20 @@ To build an optimized production binary:
 go build -ldflags="-s -w" -o dpd-updater ./cmd/dpd-updater
 ```
 
+### Building for Multiple Platforms
+
+Fyne uses platform-specific graphics libraries (OpenGL), so **cross-compilation is not supported**. 
+
+To build for Windows, use one of these methods:
+
+**Option 1: Use GitHub Actions (Recommended)**
+The project includes a workflow that builds for all platforms automatically. Go to Actions → "Build & Release" and run the workflow.
+
+**Option 2: Build on Windows directly**
+On a Windows machine with Go installed:
+```bash
+go build -ldflags="-s -w" -o dpd-updater.exe ./cmd/dpd-updater
+```
+
 ## License
 MIT License
